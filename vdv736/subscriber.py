@@ -1,15 +1,18 @@
+import logging
 import uuid
 
 from .isotime import timestamp
 from .model import Subscription
 from .request import SituationExchangeSubscriptionRequest
 
+from fastapi import FastAPI
+from fastapi import APIRouter
 
-class Subscriber():
+
+class SubscriberController():
 
     def __init__(self):
         self._subscriptions = dict()
-        self._situations = list()
 
     def subscribe(self, publisher_host: str, publisher_port: int, subscriber_ref: str) -> str|None:
 
@@ -23,21 +26,51 @@ class Subscriber():
 
         request = SituationExchangeSubscriptionRequest(subscription)
         if request.execute():
+            logging.info(f"Initialized subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
+
             return subscription_id
         else:
+            logging.error(f"Failed to initalize subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
+
             return None
         
     def unsubscribe(self, subscription_id: str) -> bool:
         
-        subscriptions = self._subscriptions[subscription_id]
+        if subscription_id not in self._subscriptions.keys():
+            return
+
+        subscription = self._subscriptions[subscription_id]
         
         # create termination request here ...
         result = True
 
         if result:
             del self._subscriptions[subscription_id]
-        
+
         return result
 
 
+class SubscriberEndpoint():
 
+    def __init__(self, callback):
+        self._router = APIRouter()
+        self._endpoint = FastAPI()
+
+        self._router.add_api_route('/rss', self._rss, methods=['GET'])
+
+        self._callback = callback
+
+    def create_endpoint(self, subscription_endpoint='/subscription/{subscription_id}'):
+
+        self._router.add_api_route(subscription_endpoint, self._subscription, methods=['POST'])
+        
+        self._endpoint.include_router(self._router)
+
+        return self._endpoint
+
+    async def _subscription(self, subscription_id: str) -> None:
+        if self._callback is not None:
+            self._callback(test=subscription_id)
+
+    async def _rss(self) -> None:
+        pass
