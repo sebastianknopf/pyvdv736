@@ -6,6 +6,7 @@ from lxml.etree import tostring
 from lxml.etree import Element, SubElement, ElementTree
 
 from .isotime import timestamp
+from .isotime import interval
 from .model import Subscription
 
 
@@ -41,10 +42,10 @@ class SubscriptionRequest(SiriRequest):
         super().__init__(subscription_host, subscription_port)
 
         SubElement(self._xml.getroot(), 'SubscriptionRequest')
-        SubElement(self._xml.getroot().find('.//SubscriptionRequest'), 'RequestTimestamp').text = timestamp()
-        SubElement(self._xml.getroot().find('.//SubscriptionRequest'), 'RequestorRef').text = subscriber_ref
-        SubElement(self._xml.getroot().find('.//SubscriptionRequest'), 'SubscriptionContext')
-        SubElement(self._xml.getroot().find('.//SubscriptionRequest/SubscriptionContext'), 'HeartbeatInterval').text = 'PT5M'
+        SubElement(self._xml.find('.//SubscriptionRequest'), 'RequestTimestamp').text = timestamp()
+        SubElement(self._xml.find('.//SubscriptionRequest'), 'RequestorRef').text = subscriber_ref
+        SubElement(self._xml.find('.//SubscriptionRequest'), 'SubscriptionContext')
+        SubElement(self._xml.find('.//SubscriptionRequest/SubscriptionContext'), 'HeartbeatInterval').text = interval(0, 0, 0, 0, 5, 0)
 
 
 class SituationExchangeSubscriptionRequest(SubscriptionRequest):
@@ -52,11 +53,11 @@ class SituationExchangeSubscriptionRequest(SubscriptionRequest):
     def __init__(self, subscription: Subscription):
         super().__init__(subscription.host, subscription.port, subscription.subscriber)
 
-        SubElement(self._xml.getroot().find('.//SubscriptionRequest'), 'SituationExchangeSubscriptionRequest')
-        SubElement(self._xml.getroot().find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest'), 'SubscriberRef').text = subscription.subscriber
-        SubElement(self._xml.getroot().find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest'), 'SubscriptionIdentifier').text = subscription.id
-        SubElement(self._xml.getroot().find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest'), 'InitialTerminationTime').text = subscription.termination
-        SubElement(self._xml.getroot().find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest'), 'SituationExchangeRequest', version='2.0')
-        SubElement(self._xml.getroot().find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest/SituationExchangeRequest'), 'RequestTimestamp').text = timestamp()
+        SubElement(self._xml.find('.//SubscriptionRequest'), 'SituationExchangeSubscriptionRequest')
+        SubElement(self._xml.find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest'), 'SubscriberRef').text = subscription.subscriber
+        SubElement(self._xml.find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest'), 'SubscriptionIdentifier').text = subscription.id
+        SubElement(self._xml.find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest'), 'InitialTerminationTime').text = subscription.termination
+        SubElement(self._xml.find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest'), 'SituationExchangeRequest', version='2.0')
+        SubElement(self._xml.find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest/SituationExchangeRequest'), 'RequestTimestamp').text = timestamp()
 
         
