@@ -12,8 +12,8 @@ from .model import Subscription
 
 class SiriRequest(ABC):
 
-    def __init__(self, host: str, port: int):
-        self._address = f"{host}:{port}"
+    def __init__(self, host: str, port: int, subscribe_endpoint: str):
+        self._address = f"{host}:{port}{subscribe_endpoint}"
 
         root = Element('Siri', xmlns='http://www.siri.org.uk/siri', version='2.0')
         self._xml = ElementTree(root)
@@ -38,8 +38,8 @@ class SiriRequest(ABC):
 
 class SubscriptionRequest(SiriRequest):
 
-    def __init__(self, subscription_host: str, subscription_port: int, subscriber_ref: str):
-        super().__init__(subscription_host, subscription_port)
+    def __init__(self, subscription_host: str, subscription_port: int, subscriber_ref: str, subscribe_endpoint: str):
+        super().__init__(subscription_host, subscription_port, subscribe_endpoint)
 
         SubElement(self._xml.getroot(), 'SubscriptionRequest')
         SubElement(self._xml.find('.//SubscriptionRequest'), 'RequestTimestamp').text = timestamp()
@@ -51,7 +51,7 @@ class SubscriptionRequest(SiriRequest):
 class SituationExchangeSubscriptionRequest(SubscriptionRequest):
 
     def __init__(self, subscription: Subscription):
-        super().__init__(subscription.host, subscription.port, subscription.subscriber)
+        super().__init__(subscription.host, subscription.port, subscription.subscriber, subscription.subscribe_endpoint)
 
         SubElement(self._xml.find('.//SubscriptionRequest'), 'SituationExchangeSubscriptionRequest')
         SubElement(self._xml.find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest'), 'SubscriberRef').text = subscription.subscriber

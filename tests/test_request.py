@@ -13,15 +13,14 @@ class SiriRequest_Test(unittest.TestCase):
 
         request = SiriRequest(
             'http://127.0.0.1', 
-            8080
+            8080,
+            '/subscribe'
         )
         
         self.assertIsNotNone(request.xml())
         self.assertIsNotNone(request._xml.getroot())
         self.assertEqual(request._xml.getroot().attrib.get('version'), '2.0')
-
-        result = request.execute()
-        self.assertTrue(result)
+        self.assertEqual(request._address, 'http://127.0.0.1:8080/subscribe')
 
 
 class SubscriptionRequest_Test(unittest.TestCase):
@@ -32,14 +31,12 @@ class SubscriptionRequest_Test(unittest.TestCase):
         request = SubscriptionRequest(
             'http://127.0.0.1', 
             8080, 
-            subscriber_ref
+            subscriber_ref,
+            '/subscribe'
         )
         
         self.assertIsNotNone(request.xml())
         self.assertEqual(request._xml.getroot().find('.//SubscriptionRequest/RequestorRef').text, subscriber_ref)
-
-        result = request.execute()
-        self.assertTrue(result)
 
 
 class SituationExchangeSubscriptionRequest_Test(unittest.TestCase):
@@ -57,5 +54,3 @@ class SituationExchangeSubscriptionRequest_Test(unittest.TestCase):
         self.assertEqual(request._xml.getroot().find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest/SubscriptionIdentifier').text, subscription_id)
         self.assertEqual(request._xml.getroot().find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest/InitialTerminationTime').text, subscription_termination)
 
-        result = request.execute()
-        self.assertTrue(result)

@@ -15,9 +15,9 @@ class SubscriberController():
     def __init__(self):
         self._subscriptions = dict()
 
-        self._situation_index = ShareableList(name='vdv736.situations.index')
+        self._situation_index = ShareableList(name='vdv736.subscriber.situation.index')
 
-    def subscribe(self, publisher_host: str, publisher_port: int, subscriber_ref: str) -> str|None:
+    def subscribe(self, publisher_host: str, publisher_port: int, subscriber_ref: str, subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe') -> str|None:
 
         subscription_id = str(uuid.uuid4())
         subscription_host = publisher_host
@@ -25,6 +25,9 @@ class SubscriberController():
         subscription_termination = timestamp(60 * 60 * 24)
 
         subscription = Subscription(subscription_id, subscription_host, subscription_port, subscriber_ref, subscription_termination)
+        subscription.subscribe_endpoint = subscribe_endpoint
+        subscription.unsubscribe_endpoint = unsubscribe_endpoint
+
         self._subscriptions[subscription_id] = subscription
 
         request = SituationExchangeSubscriptionRequest(subscription)
@@ -53,7 +56,8 @@ class SubscriberController():
         return result
     
     def get_situations(self) -> None:
-        print(list(self._situation_index))
+        pass
+        #print(list(self._situation_index))
         #return self._situations
 
 
@@ -65,7 +69,7 @@ class SubscriberEndpoint():
 
         self._router.add_api_route('/rss', self._rss, methods=['GET'])
 
-        self._situation_index = ShareableList([('0' * 36) for _ in range(5)], name='vdv736.situations.index')
+        self._situation_index = ShareableList([('0' * 36) for _ in range(5000)], name='vdv736.subscriber.situation.index')
 
     def create_endpoint(self, subscription_endpoint='/subscription/{subscription_id}'):
 
