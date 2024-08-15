@@ -1,9 +1,13 @@
 import logging
+import requests
 import uuid
 
 from .isotime import timestamp
 from .model import Subscription
+from .request import SiriRequest
 from .request import SituationExchangeSubscriptionRequest
+from .response import xml2siri_response
+from .response import SiriResponse
 
 from fastapi import FastAPI
 from fastapi import APIRouter
@@ -31,7 +35,9 @@ class SubscriberController():
         self._subscriptions[subscription_id] = subscription
 
         request = SituationExchangeSubscriptionRequest(subscription)
-        if request.execute():
+        response = self._send_request(subscription, request)
+
+        if response.Siri.SubscriptionResponse.ResponseStatus.Status == True:
             logging.info(f"Initialized subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
 
             return subscription_id
@@ -59,6 +65,21 @@ class SubscriberController():
         pass
         #print(list(self._situation_index))
         #return self._situations
+
+    def _send_request(self, subscription: Subscription, siri_request: SiriRequest) -> SiriResponse:
+        try:
+            endpoint = f"{subscription.host}:{subscription.port}/{subscription.subscribe_endpoint}"
+            
+            headers = {
+                "Content-Type": "application/xml"
+            }
+            
+            response_xml = requests.post(endpoint, headers=headers, data=siri_request.xml())
+            response = xml2siri_response(response_xml.content)
+
+            return response
+        except Exception as exception:
+            logging.exception(exception)
 
 
 class SubscriberEndpoint():

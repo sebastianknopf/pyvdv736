@@ -1,12 +1,15 @@
 import logging
+import requests
 import uuid
 
-from .isotime import timestamp
 from .model import Subscription
-from .request import SituationExchangeSubscriptionRequest
+from .request import xml2siri_request
+from .response import SubscriptionResponse
 
 from fastapi import FastAPI
 from fastapi import APIRouter
+from fastapi import Request
+from fastapi import Response
 from multiprocessing.shared_memory import ShareableList
 
 
@@ -29,7 +32,7 @@ class PublisherEndpoint():
 
         self._router.add_api_route('/rss', self._rss, methods=['GET'])
 
-        self._subscription_index = ShareableList([('0' * 36) for _ in range(100)], name='vdv736.publisher.subscription.index')
+        self._subscriptions = dict()
         self._situation_index = ShareableList([('0' * 36) for _ in range(5000)], name='vdv736.publisher.situation.index')
 
     def create_endpoint(self, subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe'):
@@ -41,16 +44,35 @@ class PublisherEndpoint():
 
         return self._endpoint
     
-    async def _subscribe(self) -> None:
+    async def _subscribe(self, req: Request) -> None:
+        request = xml2siri_request(await req.body())
 
-        # this is how to add a situation ID to the situation index
-        for index, situation_id in enumerate(list(self._situation_index)):
-            print(situation_id)
-            if not situation_id.startswith('00000000'):
-                continue
+        # add subscription parameters to subscription index
+        subscription_id = request.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriptionIdentifier
+        subscription_termination = request.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.InitialTerminationTime
 
-            self._situation_index[index] = None
-            break
+        subscription = Subscription(
+            subscription_id,
+            None,
+            None,
+            request.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriberRef,
+            subscription_termination
+        )
+            
+        try:
+            self._subscriptions[subscription_id] = subscription
+
+            # respond with SubscriptionResponse OK
+            response = SubscriptionResponse('PY_TEST_PUBLISHER')
+            response.ok(subscription_id, subscription_termination)
+
+            return Response(content=response.xml(), media_type='application/xml')
+        except Exception:
+            # respond with SubscriptionResponse Error
+            response = SubscriptionResponse('PY_TEST_PUBLISHER')
+            response.error(subscription_id)
+
+            return Response(content=response.xml(), media_type='application/xml')
 
     async def _unsubscribe(self) -> None:
         pass

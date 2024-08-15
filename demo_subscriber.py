@@ -1,8 +1,12 @@
-import time
+import logging
 import sys
+import time
 
 from vdv736.subscriber import SubscriberController
 from vdv736.subscriber import SubscriberEndpoint
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 if len(sys.argv) > 1 and sys.argv[1] == 'controller':
     controller = SubscriberController()
