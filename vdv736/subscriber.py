@@ -7,12 +7,15 @@ from .request import SituationExchangeSubscriptionRequest
 
 from fastapi import FastAPI
 from fastapi import APIRouter
+from multiprocessing.shared_memory import ShareableList
 
 
 class SubscriberController():
 
     def __init__(self):
         self._subscriptions = dict()
+
+        self._situation_index = ShareableList(name='vdv736.situations.index')
 
     def subscribe(self, publisher_host: str, publisher_port: int, subscriber_ref: str) -> str|None:
 
@@ -48,17 +51,21 @@ class SubscriberController():
             del self._subscriptions[subscription_id]
 
         return result
+    
+    def get_situations(self) -> None:
+        print(list(self._situation_index))
+        #return self._situations
 
 
 class SubscriberEndpoint():
 
-    def __init__(self, callback):
+    def __init__(self):
         self._router = APIRouter()
         self._endpoint = FastAPI()
 
         self._router.add_api_route('/rss', self._rss, methods=['GET'])
 
-        self._callback = callback
+        self._situation_index = ShareableList([('0' * 36) for _ in range(5)], name='vdv736.situations.index')
 
     def create_endpoint(self, subscription_endpoint='/subscription/{subscription_id}'):
 
@@ -67,10 +74,17 @@ class SubscriberEndpoint():
         self._endpoint.include_router(self._router)
 
         return self._endpoint
-
+    
     async def _subscription(self, subscription_id: str) -> None:
-        if self._callback is not None:
-            self._callback(test=subscription_id)
+
+        # this is how to add a situation ID to the situation index
+        for index, situation_id in enumerate(list(self._situation_index)):
+            print(situation_id)
+            if not situation_id.startswith('00000000'):
+                continue
+
+            self._situation_index[index] = subscription_id
+            break
 
     async def _rss(self) -> None:
         pass
