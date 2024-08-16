@@ -35,6 +35,17 @@ class SubscriptionRequest(SiriRequest):
         self.Siri.SubscriptionRequest.SubscriptionContext.HeartbeatInterval = interval(0, 0, 0, 0, 5, 0)
 
 
+class TerminateSubscriptionRequest(SiriRequest):
+
+    def __init__(self, subscription: Subscription):
+        super().__init__()
+
+        self.Siri.TerminateSubscriptionRequest = Element('TerminateSubscriptionRequest')
+        self.Siri.TerminateSubscriptionRequest.RequestTimestamp = timestamp()
+        self.Siri.TerminateSubscriptionRequest.RequestorRef = subscription.subscriber
+        self.Siri.TerminateSubscriptionRequest.All = Element('All')
+
+
 class SituationExchangeSubscriptionRequest(SubscriptionRequest):
 
     def __init__(self, subscription: Subscription):

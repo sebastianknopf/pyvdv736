@@ -43,12 +43,49 @@ class SubscriptionResponse(SiriResponse):
         self.Siri.SubscriptionResponse.ResponseStatus.ShortestPossibleCycle = interval(0, 0, 0, 0, 1, 0)
 
     def error(self, subscription_id: str):
+
         self.Siri.SubscriptionResponse.ResponseStatus.ResponseTimestamp = timestamp()
         self.Siri.SubscriptionResponse.ResponseStatus.SubscriptionRef = subscription_id
         self.Siri.SubscriptionResponse.ResponseStatus.Status = False
 
         self.Siri.SubscriptionResponse.ResponseStatus.ErrorCondition = Element('ErrorCondition')
 
+
+class TerminateSubscriptionResponse(SiriResponse):
+
+    def __init__(self, responder_ref: str):
+        super().__init__()
+
+        self.Siri.TerminationSubscriptionResponse = Element('TerminationSubscriptionResponse')
+        self.Siri.TerminationSubscriptionResponse.ResponseTimestamp = timestamp()
+        self.Siri.TerminationSubscriptionResponse.ResponderRef = responder_ref
+
+    def ok(self, subscriber_ref: str, subscription_id: str):
+        self.add_ok(subscriber_ref, subscription_id)
+
+    def error(self, subscription_id: str):
+        self.add_error(subscription_id)
+
+    def add_ok(self, subscriber_ref: str, subscription_id: str):
+        
+        termination_response_status = Element('TerminationResponseStatus')
+        termination_response_status.ResponseTimestamp = timestamp()
+        termination_response_status.SubscriberRef = subscriber_ref
+        termination_response_status.SubscriptionRef = subscription_id
+        termination_response_status.Status = True
+
+        self.Siri.TerminationSubscriptionResponse.append(termination_response_status)
+
+    def add_error(self, subscription_id: str):
+
+        termination_response_status = Element('TerminationResponseStatus')
+        termination_response_status.SubscriptionRef = subscription_id
+        termination_response_status.Status = False
+
+        termination_response_status.ErrorCondition = Element('ErrorCondition')
+        termination_response_status.ErrorCondition.OtherError = Element('OtherError')
+
+        self.Siri.TerminationSubscriptionResponse.append(termination_response_status)
 
 def xml2siri_response(xml: str) -> SiriResponse:
     response = SiriResponse()

@@ -10,7 +10,11 @@ logger.setLevel(logging.INFO)
 
 if len(sys.argv) > 1 and sys.argv[1] == 'controller':
     controller = SubscriberController()
-    controller.subscribe('http://127.0.0.1', 9091, 'PY_TEST_SUBSCRIBER')
+    subscription_id = controller.subscribe('http://127.0.0.1', 9091, 'PY_TEST_SUBSCRIBER')
+
+    time.sleep(10)
+
+    controller.unsubscribe(subscription_id)
 
     while True:
         controller.get_situations()

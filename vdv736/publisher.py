@@ -5,6 +5,7 @@ import uuid
 from .model import Subscription
 from .request import xml2siri_request
 from .response import SubscriptionResponse
+from .response import TerminateSubscriptionResponse
 
 from fastapi import FastAPI
 from fastapi import APIRouter
@@ -74,8 +75,32 @@ class PublisherEndpoint():
 
             return Response(content=response.xml(), media_type='application/xml')
 
-    async def _unsubscribe(self) -> None:
-        pass
+    async def _unsubscribe(self, req: Request) -> None:
+        request = xml2siri_request(await req.body())
+
+        subscriber_ref = request.Siri.TerminateSubscriptionRequest.RequestorRef
+
+        # check which subscription should be deleted - currently, only all subscriptions by a certain subscriber can be deleted
+        subscriptions_to_delete = list()
+
+        for subscription_id, subscription in self._subscriptions.items():
+            if subscription.subscriber == subscriber_ref:
+                subscriptions_to_delete.append(subscription_id)
+
+        response = TerminateSubscriptionResponse('PY_TEST_PUBLISHER')
+        for subscription_id in subscriptions_to_delete:
+            try:
+                # delete subscription from subscription stack
+                del self._subscriptions[subscription_id]
+
+                # respond with SubscriptionResponse OK
+                response.add_ok(subscriber_ref, subscription_id)
+                
+            except Exception:
+                # respond with SubscriptionResponse Error for this subscription
+                response.add_error(subscriber_ref, subscription_id)
+
+        return Response(content=response.xml(), media_type='application/xml')
 
     async def _rss(self) -> None:
         pass

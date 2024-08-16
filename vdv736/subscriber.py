@@ -6,6 +6,7 @@ from .isotime import timestamp
 from .model import Subscription
 from .request import SiriRequest
 from .request import SituationExchangeSubscriptionRequest
+from .request import TerminateSubscriptionRequest
 from .response import xml2siri_response
 from .response import SiriResponse
 
@@ -48,18 +49,25 @@ class SubscriberController():
         
     def unsubscribe(self, subscription_id: str) -> bool:
         
-        if subscription_id not in self._subscriptions.keys():
-            return
-
+        # take subscription instance from subscription stack
         subscription = self._subscriptions[subscription_id]
         
         # create termination request here ...
-        result = True
+        request = TerminateSubscriptionRequest(subscription)
+        response = self._send_request(subscription, request)
 
-        if result:
-            del self._subscriptions[subscription_id]
+        # check each termination subscription response for success
+        for termination_response_status in response.Siri.TerminationSubscriptionResponse.TerminationResponseStatus:
+            if termination_response_status.Status == True:
+                logging.info(f"Terminated subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
+                
+                del self._subscriptions[subscription_id]
 
-        return result
+                return True
+            else:
+                logging.error(f"Failed to terminate subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
+
+                return False
     
     def get_situations(self) -> None:
         pass
@@ -68,7 +76,10 @@ class SubscriberController():
 
     def _send_request(self, subscription: Subscription, siri_request: SiriRequest) -> SiriResponse:
         try:
-            endpoint = f"{subscription.host}:{subscription.port}/{subscription.subscribe_endpoint}"
+            if isinstance(siri_request, SituationExchangeSubscriptionRequest):
+                endpoint = f"{subscription.host}:{subscription.port}/{subscription.subscribe_endpoint}"
+            elif isinstance(siri_request, TerminateSubscriptionRequest):
+                endpoint = f"{subscription.host}:{subscription.port}/{subscription.unsubscribe_endpoint}"
             
             headers = {
                 "Content-Type": "application/xml"
