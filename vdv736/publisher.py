@@ -6,6 +6,7 @@ import uvicorn
 from .isotime import timestamp
 from .model import Subscription
 from .request import xml2siri_request
+from .response import CheckStatusResponse
 from .response import SubscriptionResponse
 from .response import TerminateSubscriptionResponse
 
@@ -57,7 +58,7 @@ class Publisher():
 class PublisherEndpoint():
 
     def __init__(self):
-        self._service_startup_time = timestamp()
+        self._service_started_time = timestamp()
         self._logger = logging.getLogger('uvicorn')
 
         self._router = APIRouter()
@@ -65,9 +66,10 @@ class PublisherEndpoint():
 
         self._subscriptions = dict()
 
-    def create_endpoint(self, participant_ref: str, subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe'):
+    def create_endpoint(self, participant_ref: str, status_endpoint='/status', subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe'):
         self._participant_ref = participant_ref
 
+        self._router.add_api_route(status_endpoint, self._status, methods=['POST'])
         self._router.add_api_route(subscribe_endpoint, self._subscribe, methods=['POST'])
         self._router.add_api_route(unsubscribe_endpoint, self._unsubscribe, methods=['POST'])
         
@@ -75,7 +77,14 @@ class PublisherEndpoint():
 
         return self._endpoint
     
-    async def _subscribe(self, req: Request) -> None:
+    async def _status(self, req: Request) -> Response:
+        request = xml2siri_request(await req.body())
+
+        # simply respond with current status
+        response = CheckStatusResponse(self._service_started_time)
+        return Response(content=response.xml(), media_type='application/xml')
+
+    async def _subscribe(self, req: Request) -> Response:
         request = xml2siri_request(await req.body())
 
         # add subscription parameters to subscription index
@@ -105,7 +114,7 @@ class PublisherEndpoint():
 
             return Response(content=response.xml(), media_type='application/xml')
 
-    async def _unsubscribe(self, req: Request) -> None:
+    async def _unsubscribe(self, req: Request) -> Response:
         request = xml2siri_request(await req.body())
 
         subscriber_ref = request.Siri.TerminateSubscriptionRequest.RequestorRef

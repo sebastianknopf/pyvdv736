@@ -22,6 +22,16 @@ class SiriRequest(ABC):
         return tostring(self.Siri, pretty_print=True, xml_declaration=True, encoding='UTF-8')
 
 
+class CheckStatusRequest(SiriRequest):
+
+    def __init__(self, subscription: Subscription):
+        super().__init__()
+
+        self.Siri.CheckStatusRequest = Element('CheckStatusRequest', version='2.0')
+        self.Siri.CheckStatusRequest.RequestTimestamp = timestamp()
+        self.Siri.CheckStatusRequest.RequestorRef = subscription.subscriber
+
+
 class SubscriptionRequest(SiriRequest):
 
     def __init__(self, subscriber_ref: str):
@@ -30,9 +40,6 @@ class SubscriptionRequest(SiriRequest):
         self.Siri.SubscriptionRequest = Element('SubscriptionRequest')
         self.Siri.SubscriptionRequest.RequestTimestamp = timestamp()
         self.Siri.SubscriptionRequest.RequestorRef = subscriber_ref
-
-        self.Siri.SubscriptionRequest.SubscriptionContext = Element('SubscriptionContext')
-        self.Siri.SubscriptionRequest.SubscriptionContext.HeartbeatInterval = interval(0, 0, 0, 0, 5, 0)
 
 
 class TerminateSubscriptionRequest(SiriRequest):

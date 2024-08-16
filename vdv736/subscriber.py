@@ -6,6 +6,7 @@ import uvicorn
 from .isotime import timestamp
 from .model import Subscription
 from .request import SiriRequest
+from .request import CheckStatusRequest
 from .request import SituationExchangeSubscriptionRequest
 from .request import TerminateSubscriptionRequest
 from .response import xml2siri_response
@@ -33,7 +34,38 @@ class Subscriber():
         if self._endpoint_thread is not None:
             self._endpoint_thread.join(5)
 
-    def subscribe(self, publisher_host: str, publisher_port: int, subscriber_ref: str, subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe') -> str|None:
+    def status(self, subscription_id=None) -> bool:
+        if subscription_id is not None:
+            subscription = self._subscriptions[subscription_id]
+
+            request = CheckStatusRequest(subscription)
+            response = self._send_request(subscription, request)
+
+            if response is not None and response.Siri.CheckStatusResponse.Status == True:
+                self._logger.info(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
+                return True
+            else:
+                self._logger.error(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
+                
+                subscription.healthy = False
+                return False
+        else:
+            all_subscriptions_ok = True
+            for subscription_id, subscription in self._subscriptions.items():
+                request = CheckStatusRequest(subscription)
+                response = self._send_request(subscription, request)
+
+                if response is not None and response.Siri.CheckStatusResponse.Status == True:
+                    self._logger.info(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
+                else:
+                    self._logger.error(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
+                    
+                    subscription.healthy = False
+                    all_subscriptions_ok = False
+
+            return all_subscriptions_ok
+
+    def subscribe(self, publisher_host: str, publisher_port: int, subscriber_ref: str, status_endpoint='/status', subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe') -> str|None:
 
         subscription_id = str(uuid.uuid4())
         subscription_host = publisher_host
@@ -41,6 +73,7 @@ class Subscriber():
         subscription_termination = timestamp(60 * 60 * 24)
 
         subscription = Subscription(subscription_id, subscription_host, subscription_port, subscriber_ref, subscription_termination)
+        subscription.status_endpoint = status_endpoint
         subscription.subscribe_endpoint = subscribe_endpoint
         subscription.unsubscribe_endpoint = unsubscribe_endpoint
 
@@ -101,9 +134,11 @@ class Subscriber():
         # run ASGI server with endpoint
         uvicorn.run(app=endpoint, host='127.0.0.1', port=9090)
 
-    def _send_request(self, subscription: Subscription, siri_request: SiriRequest) -> SiriResponse:
+    def _send_request(self, subscription: Subscription, siri_request: SiriRequest) -> SiriResponse|None:
         try:
-            if isinstance(siri_request, SituationExchangeSubscriptionRequest):
+            if isinstance(siri_request, CheckStatusRequest):
+                endpoint = f"{subscription.host}:{subscription.port}/{subscription.status_endpoint}"
+            elif isinstance(siri_request, SituationExchangeSubscriptionRequest):
                 endpoint = f"{subscription.host}:{subscription.port}/{subscription.subscribe_endpoint}"
             elif isinstance(siri_request, TerminateSubscriptionRequest):
                 endpoint = f"{subscription.host}:{subscription.port}/{subscription.unsubscribe_endpoint}"
@@ -118,6 +153,8 @@ class Subscriber():
             return response
         except Exception as exception:
             self._logger.exception(exception)
+
+            return None
 
 
 class SubscriberEndpoint():

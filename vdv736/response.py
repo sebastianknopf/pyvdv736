@@ -21,6 +21,19 @@ class SiriResponse(ABC):
         return tostring(self.Siri, pretty_print=True, xml_declaration=True, encoding='UTF-8') 
     
 
+class CheckStatusResponse(SiriResponse):
+
+     def __init__(self, service_started_time: str):
+         super().__init__()
+
+         self.Siri.CheckStatusResponse = Element('CheckStatusResponse')
+         self.Siri.CheckStatusResponse.ResponseTimestamp = timestamp()
+         self.Siri.CheckStatusResponse.Status = True
+         self.Siri.CheckStatusResponse.ValidUntil = ''
+         self.Siri.CheckStatusResponse.ShortestPossibleCycle = interval(0, 0, 0, 0, 1, 0)
+         self.Siri.CheckStatusResponse.ServiceStartedTime = service_started_time
+
+
 class SubscriptionResponse(SiriResponse):
 
     def __init__(self, responder_ref: str):

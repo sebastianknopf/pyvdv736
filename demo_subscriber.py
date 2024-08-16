@@ -14,4 +14,8 @@ with Subscriber() as subscriber:
 
     time.sleep(10)
 
+    subscriber.status(sid)
+
+    time.sleep(10)
+
     subscriber.unsubscribe(sid)

@@ -10,6 +10,7 @@ class Subscription:
         self.subscriber = subscriber
         self.termination = termination
 
+        self.status_endpoint = '/status'
         self.subscribe_endpoint = '/subscribe'
         self.unsubscribe_endpoint = '/unsubscribe'
 
