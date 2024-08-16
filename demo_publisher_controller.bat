@@ -1,1 +1,0 @@
-python demo_publisher.py controller

@@ -2,17 +2,11 @@ import logging
 import sys
 import time
 
-from vdv736.publisher import PublisherController
+from vdv736.publisher import Publisher
 from vdv736.publisher import PublisherEndpoint
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
 
-if len(sys.argv) > 1 and sys.argv[1] == 'controller':
-    controller = PublisherController()
-
+with Publisher('PY_TEST_PUBLISHER') as publisher:
     while True:
-        controller.publish()
-        time.sleep(300)
-else:
-    endpoint = PublisherEndpoint().create_endpoint()
+        pass

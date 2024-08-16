@@ -1,6 +1,7 @@
 import logging
 import requests
 import uuid
+import uvicorn
 
 from .isotime import timestamp
 from .model import Subscription
@@ -12,15 +13,25 @@ from .response import SiriResponse
 
 from fastapi import FastAPI
 from fastapi import APIRouter
-from multiprocessing.shared_memory import ShareableList
+from threading import Thread
 
 
-class SubscriberController():
+class Subscriber():
 
     def __init__(self):
+        self._logger = logging.getLogger('uvicorn')
+
         self._subscriptions = dict()
 
-        self._situation_index = ShareableList(name='vdv736.subscriber.situation.index')
+    def __enter__(self):
+        self._endpoint_thread = Thread(target=self._run_endpoint, args=(), daemon=True)
+        self._endpoint_thread.start()
+
+        return self
+
+    def __exit__(self, exception_type, exception_value, exception_traceback):
+        if self._endpoint_thread is not None:
+            self._endpoint_thread.join(5)
 
     def subscribe(self, publisher_host: str, publisher_port: int, subscriber_ref: str, subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe') -> str|None:
 
@@ -39,11 +50,11 @@ class SubscriberController():
         response = self._send_request(subscription, request)
 
         if response.Siri.SubscriptionResponse.ResponseStatus.Status == True:
-            logging.info(f"Initialized subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
+            self._logger.info(f"Initialized subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
 
             return subscription_id
         else:
-            logging.error(f"Failed to initalize subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
+            self._logger.error(f"Failed to initalize subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
 
             return None
         
@@ -59,13 +70,13 @@ class SubscriberController():
         # check each termination subscription response for success
         for termination_response_status in response.Siri.TerminationSubscriptionResponse.TerminationResponseStatus:
             if termination_response_status.Status == True:
-                logging.info(f"Terminated subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
+                self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
                 
                 del self._subscriptions[subscription_id]
 
                 return True
             else:
-                logging.error(f"Failed to terminate subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
+                self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
 
                 return False
     
@@ -73,6 +84,22 @@ class SubscriberController():
         pass
         #print(list(self._situation_index))
         #return self._situations
+
+    def _run_endpoint(self):
+        endpoint = SubscriberEndpoint().create_endpoint()
+
+        # disable uvicorn logs
+        logging.getLogger('uvicorn.error').handlers = []
+        logging.getLogger('uvicorn.error').propagate = False
+
+        logging.getLogger('uvicorn.access').handlers = []
+        logging.getLogger('uvicorn.access').propagate = False
+
+        logging.getLogger('uvicorn.asgi').handlers = []
+        logging.getLogger('uvicorn.asgi').propagate = False
+
+        # run ASGI server with endpoint
+        uvicorn.run(app=endpoint, host='127.0.0.1', port=9090)
 
     def _send_request(self, subscription: Subscription, siri_request: SiriRequest) -> SiriResponse:
         try:
@@ -90,7 +117,7 @@ class SubscriberController():
 
             return response
         except Exception as exception:
-            logging.exception(exception)
+            self._logger.exception(exception)
 
 
 class SubscriberEndpoint():
@@ -98,10 +125,6 @@ class SubscriberEndpoint():
     def __init__(self):
         self._router = APIRouter()
         self._endpoint = FastAPI()
-
-        self._router.add_api_route('/rss', self._rss, methods=['GET'])
-
-        self._situation_index = ShareableList([('0' * 36) for _ in range(5000)], name='vdv736.subscriber.situation.index')
 
     def create_endpoint(self, subscription_endpoint='/subscription/{subscription_id}'):
 
@@ -112,15 +135,13 @@ class SubscriberEndpoint():
         return self._endpoint
     
     async def _subscription(self, subscription_id: str) -> None:
-
+        pass
         # this is how to add a situation ID to the situation index
-        for index, situation_id in enumerate(list(self._situation_index)):
+        """for index, situation_id in enumerate(list(self._situation_index)):
             print(situation_id)
             if not situation_id.startswith('00000000'):
                 continue
 
             self._situation_index[index] = subscription_id
-            break
-
-    async def _rss(self) -> None:
-        pass
+            break"""
+        

@@ -1,7 +1,9 @@
 import logging
 import requests
 import uuid
+import uvicorn
 
+from .isotime import timestamp
 from .model import Subscription
 from .request import xml2siri_request
 from .response import SubscriptionResponse
@@ -11,32 +13,60 @@ from fastapi import FastAPI
 from fastapi import APIRouter
 from fastapi import Request
 from fastapi import Response
-from multiprocessing.shared_memory import ShareableList
+from threading import Thread
 
 
-class PublisherController():
+class Publisher():
 
-    def __init__(self):
+    def __init__(self, participant_ref: str):
+        self._service_participant_ref = participant_ref
+        self._logger = logging.getLogger('uvicorn')
+
         self._subscriptions = dict()
 
-        self._situation_index = ShareableList(name='vdv736.publisher.situation.index')
+    def __enter__(self):
+        self._endpoint_thread = Thread(target=self._run_endpoint, args=(), daemon=True)
+        self._endpoint_thread.start()
+
+        return self
+
+    def __exit__(self, exception_type, exception_value, exception_traceback):
+        if self._endpoint_thread is not None:
+            self._endpoint_thread.join(5)    
     
     def publish(self) -> None:
         pass
+
+    def _run_endpoint(self):
+        endpoint = PublisherEndpoint().create_endpoint(self._service_participant_ref)
+
+        # disable uvicorn logs
+        logging.getLogger('uvicorn.error').handlers = []
+        logging.getLogger('uvicorn.error').propagate = False
+
+        logging.getLogger('uvicorn.access').handlers = []
+        logging.getLogger('uvicorn.access').propagate = False
+
+        logging.getLogger('uvicorn.asgi').handlers = []
+        logging.getLogger('uvicorn.asgi').propagate = False
+
+        # run ASGI server with endpoint
+        uvicorn.run(app=endpoint, host='127.0.0.1', port=9091)
 
 
 class PublisherEndpoint():
 
     def __init__(self):
+        self._service_startup_time = timestamp()
+        self._logger = logging.getLogger('uvicorn')
+
         self._router = APIRouter()
         self._endpoint = FastAPI()
 
-        self._router.add_api_route('/rss', self._rss, methods=['GET'])
-
         self._subscriptions = dict()
-        self._situation_index = ShareableList([('0' * 36) for _ in range(5000)], name='vdv736.publisher.situation.index')
 
-    def create_endpoint(self, subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe'):
+    def create_endpoint(self, participant_ref: str, subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe'):
+        self._participant_ref = participant_ref
 
         self._router.add_api_route(subscribe_endpoint, self._subscribe, methods=['POST'])
         self._router.add_api_route(unsubscribe_endpoint, self._unsubscribe, methods=['POST'])
@@ -64,13 +94,13 @@ class PublisherEndpoint():
             self._subscriptions[subscription_id] = subscription
 
             # respond with SubscriptionResponse OK
-            response = SubscriptionResponse('PY_TEST_PUBLISHER')
+            response = SubscriptionResponse(self._participant_ref)
             response.ok(subscription_id, subscription_termination)
 
             return Response(content=response.xml(), media_type='application/xml')
         except Exception:
             # respond with SubscriptionResponse Error
-            response = SubscriptionResponse('PY_TEST_PUBLISHER')
+            response = SubscriptionResponse(self._participant_ref)
             response.error(subscription_id)
 
             return Response(content=response.xml(), media_type='application/xml')
@@ -87,7 +117,7 @@ class PublisherEndpoint():
             if subscription.subscriber == subscriber_ref:
                 subscriptions_to_delete.append(subscription_id)
 
-        response = TerminateSubscriptionResponse('PY_TEST_PUBLISHER')
+        response = TerminateSubscriptionResponse(self._participant_ref)
         for subscription_id in subscriptions_to_delete:
             try:
                 # delete subscription from subscription stack
@@ -102,5 +132,3 @@ class PublisherEndpoint():
 
         return Response(content=response.xml(), media_type='application/xml')
 
-    async def _rss(self) -> None:
-        pass
