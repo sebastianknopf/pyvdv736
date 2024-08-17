@@ -4,6 +4,8 @@ import uuid
 import uvicorn
 
 from .isotime import timestamp
+from .delivery import xml2siri_delivery
+from .delivery import SituationExchangeDelivery
 from .model import Subscription
 from .request import SiriRequest
 from .request import CheckStatusRequest
@@ -11,9 +13,12 @@ from .request import SituationExchangeSubscriptionRequest
 from .request import TerminateSubscriptionRequest
 from .response import xml2siri_response
 from .response import SiriResponse
+from .response import DataReceivedAcknowledgement
 
 from fastapi import FastAPI
 from fastapi import APIRouter
+from fastapi import Request
+from fastapi import Response
 from threading import Thread
 
 
@@ -112,11 +117,6 @@ class Subscriber():
                 self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
 
                 return False
-    
-    def get_situations(self) -> None:
-        pass
-        #print(list(self._situation_index))
-        #return self._situations
 
     def _run_endpoint(self):
         endpoint = SubscriberEndpoint().create_endpoint()
@@ -163,22 +163,20 @@ class SubscriberEndpoint():
         self._router = APIRouter()
         self._endpoint = FastAPI()
 
-    def create_endpoint(self, subscription_endpoint='/subscription/{subscription_id}'):
+    def create_endpoint(self, subscription_endpoint='/delivery'):
 
-        self._router.add_api_route(subscription_endpoint, self._subscription, methods=['POST'])
+        self._router.add_api_route(subscription_endpoint, self._delivery, methods=['POST'])
         
         self._endpoint.include_router(self._router)
 
         return self._endpoint
     
-    async def _subscription(self, subscription_id: str) -> None:
-        pass
-        # this is how to add a situation ID to the situation index
-        """for index, situation_id in enumerate(list(self._situation_index)):
-            print(situation_id)
-            if not situation_id.startswith('00000000'):
-                continue
+    async def _delivery(self, req: Request) -> Response:
+        delivery = xml2siri_delivery(await req.body())
 
-            self._situation_index[index] = subscription_id
-            break"""
+        # process service delivery ...
+
+        # create data acknowledgement
+        acknowledgement = DataReceivedAcknowledgement(delivery.Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef, delivery.Siri.ServiceDelivery.ResponseMessageIdentifier)
+        return Response(content=acknowledgement.xml(), media_type='application/xml')
         

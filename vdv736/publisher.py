@@ -4,8 +4,12 @@ import uuid
 import uvicorn
 
 from .isotime import timestamp
+from .delivery import SiriServiceDelivery
+from .delivery import SituationExchangeDelivery
 from .model import Subscription
 from .request import xml2siri_request
+from .response import xml2siri_response
+from .response import SiriResponse
 from .response import CheckStatusResponse
 from .response import SubscriptionResponse
 from .response import TerminateSubscriptionResponse
@@ -36,7 +40,16 @@ class Publisher():
             self._endpoint_thread.join(5)    
     
     def publish(self) -> None:
-        pass
+        for _, subscription in self._subscriptions.items():
+            delivery = SituationExchangeDelivery(self._service_participant_ref, subscription)
+            delivery.add_situation(None)
+
+            response = self._send_delivery(subscription, delivery)
+
+            if response is not None and response.Siri.DataReceivedAcknowledgement.Status == True:
+                self._logger.info(f"Sent delivery for subscription {subscription.id} as {subscription.subscriber} successfully")
+            else:
+                self._logger.error(f"Failed to send delivery for subscription {subscription.id} as {subscription.subscriber}")
 
     def _run_endpoint(self):
         endpoint = PublisherEndpoint().create_endpoint(self._service_participant_ref)
@@ -53,6 +66,25 @@ class Publisher():
 
         # run ASGI server with endpoint
         uvicorn.run(app=endpoint, host='127.0.0.1', port=9091)
+
+
+    def _send_delivery(self, subscription: Subscription, siri_delivery: SiriServiceDelivery) -> SiriResponse|None:
+        try:
+            if isinstance(siri_delivery, SituationExchangeDelivery):
+                endpoint = f"{subscription.host}:{subscription.port}/{subscription.status_endpoint}"
+
+            headers = {
+                "Content-Type": "application/xml"
+            }
+            
+            response_xml = requests.post(endpoint, headers=headers, data=siri_delivery.xml())
+            response = xml2siri_response(response_xml.content)
+
+            return response
+        except Exception as exception:
+            self._logger.exception(exception)
+
+            return None
 
 
 class PublisherEndpoint():

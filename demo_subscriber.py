@@ -10,6 +10,8 @@ logger.setLevel(logging.INFO)
 
 with Subscriber() as subscriber:
 
+    time.sleep(15)
+    
     sid = subscriber.subscribe('http://127.0.0.1', 9091, 'PY_TEST_SUBSCRIBER')
 
     time.sleep(10)

@@ -100,6 +100,18 @@ class TerminateSubscriptionResponse(SiriResponse):
 
         self.Siri.TerminationSubscriptionResponse.append(termination_response_status)
 
+
+class DataReceivedAcknowledgement(SiriResponse):
+
+    def __init__(self, consumer_ref, request_message_ref: str):
+        super().__init__()
+
+        self.Siri.DataReceivedAcknowledgement = Element('DataReceivedAcknowledgement')
+        self.Siri.DataReceivedAcknowledgement.ResponseTimestamp = timestamp()
+        self.Siri.DataReceivedAcknowledgement.ConsumerRef = consumer_ref
+        self.Siri.DataReceivedAcknowledgement.RequestMessageRef = request_message_ref
+        self.Siri.DataReceivedAcknowledgement.Status = True
+
 def xml2siri_response(xml: str) -> SiriResponse:
     response = SiriResponse()
     response.Siri = fromstring(xml)
