@@ -110,7 +110,12 @@ class DataReceivedAcknowledgement(SiriResponse):
         self.Siri.DataReceivedAcknowledgement.ResponseTimestamp = timestamp()
         self.Siri.DataReceivedAcknowledgement.ConsumerRef = consumer_ref
         self.Siri.DataReceivedAcknowledgement.RequestMessageRef = request_message_ref
+
+    def ok(self):
         self.Siri.DataReceivedAcknowledgement.Status = True
+
+    def error(self):
+        self.Siri.DataReceivedAcknowledgement.Status = False
 
 def xml2siri_response(xml: str) -> SiriResponse:
     response = SiriResponse()

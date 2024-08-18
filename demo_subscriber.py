@@ -3,10 +3,8 @@ import sys
 import time
 
 from vdv736.subscriber import Subscriber
-from vdv736.subscriber import SubscriberEndpoint
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
 
 with Subscriber() as subscriber:
 
@@ -21,3 +19,6 @@ with Subscriber() as subscriber:
     time.sleep(10)
 
     subscriber.unsubscribe(sid)
+
+    while True:
+        pass

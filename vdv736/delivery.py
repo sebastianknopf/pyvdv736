@@ -8,7 +8,6 @@ from lxml.objectify import fromstring
 from lxml.objectify import Element
 
 from .isotime import timestamp
-from .isotime import interval
 from .model import Subscription
 
 
@@ -49,8 +48,7 @@ class SituationExchangeDelivery(SiriServiceDelivery):
         self.Siri.ServiceDelivery.SituationExchangeDelivery.Situations = Element('Situations')
 
     def add_situation(self, situation):
-
-        self.Siri.ServiceDelivery.SituationExchangeDelivery.Situations.append(Element('PtSituationElement'))
+        self.Siri.ServiceDelivery.SituationExchangeDelivery.Situations.append(situation)
 
 
 def xml2siri_delivery(xml: str) -> SiriDelivery:

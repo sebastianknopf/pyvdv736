@@ -4,8 +4,10 @@ import uuid
 import uvicorn
 
 from .isotime import timestamp
+from .database import local_node_database
 from .delivery import xml2siri_delivery
 from .delivery import SituationExchangeDelivery
+from .model import PublicTransportSituation
 from .model import Subscription
 from .request import SiriRequest
 from .request import CheckStatusRequest
@@ -27,7 +29,7 @@ class Subscriber():
     def __init__(self):
         self._logger = logging.getLogger('uvicorn')
 
-        self._subscriptions = dict()
+        self._local_node_database = local_node_database('vdv736.subscriber')
 
     def __enter__(self):
         self._endpoint_thread = Thread(target=self._run_endpoint, args=(), daemon=True)
@@ -35,13 +37,22 @@ class Subscriber():
 
         return self
 
-    def __exit__(self, exception_type, exception_value, exception_traceback):
+    def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
+        if self._endpoint is not None:
+            self._endpoint.terminate()
+        
         if self._endpoint_thread is not None:
             self._endpoint_thread.join(5)
 
+        if self._local_node_database is not None:
+            self._local_node_database.close(True)
+
+    def get_situations(self) -> dict[str, PublicTransportSituation]:
+        return self._local_node_database.get_situations()
+
     def status(self, subscription_id=None) -> bool:
         if subscription_id is not None:
-            subscription = self._subscriptions[subscription_id]
+            subscription = self._local_node_database.get_subscriptions()[subscription_id]
 
             request = CheckStatusRequest(subscription)
             response = self._send_request(subscription, request)
@@ -56,7 +67,7 @@ class Subscriber():
                 return False
         else:
             all_subscriptions_ok = True
-            for subscription_id, subscription in self._subscriptions.items():
+            for subscription_id, subscription in self._local_node_database.get_subscriptions().items():
                 request = CheckStatusRequest(subscription)
                 response = self._send_request(subscription, request)
 
@@ -77,12 +88,12 @@ class Subscriber():
         subscription_port = publisher_port
         subscription_termination = timestamp(60 * 60 * 24)
 
-        subscription = Subscription(subscription_id, subscription_host, subscription_port, subscriber_ref, subscription_termination)
+        subscription = Subscription.create(subscription_id, subscription_host, subscription_port, subscriber_ref, subscription_termination)
         subscription.status_endpoint = status_endpoint
         subscription.subscribe_endpoint = subscribe_endpoint
         subscription.unsubscribe_endpoint = unsubscribe_endpoint
 
-        self._subscriptions[subscription_id] = subscription
+        self._local_node_database.add_subscription(subscription_id, subscription)
 
         request = SituationExchangeSubscriptionRequest(subscription)
         response = self._send_request(subscription, request)
@@ -99,7 +110,7 @@ class Subscriber():
     def unsubscribe(self, subscription_id: str) -> bool:
         
         # take subscription instance from subscription stack
-        subscription = self._subscriptions[subscription_id]
+        subscription = self._local_node_database.get_subscriptions()[subscription_id]
         
         # create termination request here ...
         request = TerminateSubscriptionRequest(subscription)
@@ -110,7 +121,7 @@ class Subscriber():
             if termination_response_status.Status == True:
                 self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
                 
-                del self._subscriptions[subscription_id]
+                self._local_node_database.remove_subscription(subscription_id)
 
                 return True
             else:
@@ -118,8 +129,8 @@ class Subscriber():
 
                 return False
 
-    def _run_endpoint(self):
-        endpoint = SubscriberEndpoint().create_endpoint()
+    def _run_endpoint(self) -> None:
+        self._endpoint = SubscriberEndpoint()
 
         # disable uvicorn logs
         logging.getLogger('uvicorn.error').handlers = []
@@ -132,7 +143,7 @@ class Subscriber():
         logging.getLogger('uvicorn.asgi').propagate = False
 
         # run ASGI server with endpoint
-        uvicorn.run(app=endpoint, host='127.0.0.1', port=9090)
+        uvicorn.run(app=self._endpoint.create_endpoint(), host='127.0.0.1', port=9090)
 
     def _send_request(self, subscription: Subscription, siri_request: SiriRequest) -> SiriResponse|None:
         try:
@@ -151,32 +162,53 @@ class Subscriber():
             response = xml2siri_response(response_xml.content)
 
             return response
-        except Exception as exception:
-            self._logger.exception(exception)
-
+        except Exception as ex:
+            self._logger.error(ex)
             return None
 
 
 class SubscriberEndpoint():
 
     def __init__(self):
+        self._service_started_time = timestamp()
+        self._logger = logging.getLogger('uvicorn')
+
         self._router = APIRouter()
         self._endpoint = FastAPI()
 
-    def create_endpoint(self, subscription_endpoint='/delivery'):
+        self._local_node_database = local_node_database('vdv736.subscriber')
 
-        self._router.add_api_route(subscription_endpoint, self._delivery, methods=['POST'])
+    def create_endpoint(self, delivery_endpoint='/delivery') -> FastAPI:
+
+        self._router.add_api_route(delivery_endpoint, self._delivery, methods=['POST'])
         
         self._endpoint.include_router(self._router)
 
         return self._endpoint
     
+    def terminate(self) -> None:
+        self._local_node_database.close()
+    
     async def _delivery(self, req: Request) -> Response:
-        delivery = xml2siri_delivery(await req.body())
+        try:
+            delivery = xml2siri_delivery(await req.body())
 
-        # process service delivery ...
+            # process service delivery ...
+            for pts in delivery.Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement:
+                situation_id = pts.SituationNumber.text
+                self._local_node_database.add_situation(situation_id, pts)
 
-        # create data acknowledgement
-        acknowledgement = DataReceivedAcknowledgement(delivery.Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef, delivery.Siri.ServiceDelivery.ResponseMessageIdentifier)
-        return Response(content=acknowledgement.xml(), media_type='application/xml')
+            # create data acknowledgement with OK status
+            acknowledgement = DataReceivedAcknowledgement(delivery.Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef, delivery.Siri.ServiceDelivery.ResponseMessageIdentifier)
+            acknowledgement.ok()
+
+            return Response(content=acknowledgement.xml(), media_type='application/xml')
+        except Exception as ex:
+            self._logger.error(ex)
+
+            # create data acknowledgement
+            acknowledgement = DataReceivedAcknowledgement(delivery.Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef, delivery.Siri.ServiceDelivery.ResponseMessageIdentifier)
+            acknowledgement.error()
+
+            return Response(content=acknowledgement.xml(), media_type='application/xml')
         

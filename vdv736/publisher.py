@@ -1,11 +1,12 @@
 import logging
 import requests
-import uuid
 import uvicorn
 
 from .isotime import timestamp
+from .database import local_node_database
 from .delivery import SiriServiceDelivery
 from .delivery import SituationExchangeDelivery
+from .model import PublicTransportSituation
 from .model import Subscription
 from .request import xml2siri_request
 from .response import xml2siri_response
@@ -27,7 +28,7 @@ class Publisher():
         self._service_participant_ref = participant_ref
         self._logger = logging.getLogger('uvicorn')
 
-        self._subscriptions = dict()
+        self._local_node_database = local_node_database('vdv736.publisher')
 
     def __enter__(self):
         self._endpoint_thread = Thread(target=self._run_endpoint, args=(), daemon=True)
@@ -35,24 +36,33 @@ class Publisher():
 
         return self
 
-    def __exit__(self, exception_type, exception_value, exception_traceback):
+    def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
+        if self._endpoint is not None:
+            self._endpoint.terminate()
+        
         if self._endpoint_thread is not None:
-            self._endpoint_thread.join(5)    
+            self._endpoint_thread.join(5)
+
+        if self._local_node_database is not None:
+            self._local_node_database.close(True)
     
-    def publish(self) -> None:
-        for _, subscription in self._subscriptions.items():
+    def publish_situation(self, situation: PublicTransportSituation) -> None:
+        for _, subscription in self._local_node_database.get_subscriptions().items():
+            situation_id = situation.SituationNumber.text
+            self._local_node_database.add_situation(situation_id, situation)
+
             delivery = SituationExchangeDelivery(self._service_participant_ref, subscription)
-            delivery.add_situation(None)
+            delivery.add_situation(situation)
 
             response = self._send_delivery(subscription, delivery)
 
             if response is not None and response.Siri.DataReceivedAcknowledgement.Status == True:
-                self._logger.info(f"Sent delivery for subscription {subscription.id} as {subscription.subscriber} successfully")
+                self._logger.info(f"Sent delivery for subscription {subscription.id} to {subscription.subscriber} successfully")
             else:
-                self._logger.error(f"Failed to send delivery for subscription {subscription.id} as {subscription.subscriber}")
+                self._logger.error(f"Failed to send delivery for subscription {subscription.id} to {subscription.subscriber}")
 
-    def _run_endpoint(self):
-        endpoint = PublisherEndpoint().create_endpoint(self._service_participant_ref)
+    def _run_endpoint(self) -> None:
+        self._endpoint = PublisherEndpoint()
 
         # disable uvicorn logs
         logging.getLogger('uvicorn.error').handlers = []
@@ -65,13 +75,14 @@ class Publisher():
         logging.getLogger('uvicorn.asgi').propagate = False
 
         # run ASGI server with endpoint
-        uvicorn.run(app=endpoint, host='127.0.0.1', port=9091)
+        uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host='127.0.0.1', port=9091)
 
 
     def _send_delivery(self, subscription: Subscription, siri_delivery: SiriServiceDelivery) -> SiriResponse|None:
         try:
             if isinstance(siri_delivery, SituationExchangeDelivery):
-                endpoint = f"{subscription.host}:{subscription.port}/{subscription.status_endpoint}"
+                #endpoint = f"{subscription.host}:{subscription.port}/{subscription.status_endpoint}"
+                endpoint = f"http://127.0.0.1:9090/delivery"
 
             headers = {
                 "Content-Type": "application/xml"
@@ -96,9 +107,9 @@ class PublisherEndpoint():
         self._router = APIRouter()
         self._endpoint = FastAPI()
 
-        self._subscriptions = dict()
+        self._local_node_database = local_node_database('vdv736.publisher')
 
-    def create_endpoint(self, participant_ref: str, status_endpoint='/status', subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe'):
+    def create_endpoint(self, participant_ref: str, status_endpoint='/status', subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe') -> FastAPI:
         self._participant_ref = participant_ref
 
         self._router.add_api_route(status_endpoint, self._status, methods=['POST'])
@@ -108,6 +119,9 @@ class PublisherEndpoint():
         self._endpoint.include_router(self._router)
 
         return self._endpoint
+    
+    def terminate(self):
+        self._local_node_database.close()
     
     async def _status(self, req: Request) -> Response:
         request = xml2siri_request(await req.body())
@@ -120,26 +134,33 @@ class PublisherEndpoint():
         request = xml2siri_request(await req.body())
 
         # add subscription parameters to subscription index
-        subscription_id = request.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriptionIdentifier
-        subscription_termination = request.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.InitialTerminationTime
+        subscription_id = request.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriptionIdentifier.text
+        subscription_termination = request.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.InitialTerminationTime.text
 
-        subscription = Subscription(
+        subscription = Subscription.create(
             subscription_id,
             None,
             None,
-            request.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriberRef,
+            request.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriberRef.text,
             subscription_termination
         )
             
         try:
-            self._subscriptions[subscription_id] = subscription
+            result = self._local_node_database.add_subscription(subscription_id, subscription)
 
             # respond with SubscriptionResponse OK
             response = SubscriptionResponse(self._participant_ref)
-            response.ok(subscription_id, subscription_termination)
+
+            if result == True:
+                response.ok(subscription_id, subscription_termination)
+            else:
+                response.error(subscription_id)
 
             return Response(content=response.xml(), media_type='application/xml')
-        except Exception:
+        except Exception as ex:
+            # log exception
+            self._logger.error(ex)
+
             # respond with SubscriptionResponse Error
             response = SubscriptionResponse(self._participant_ref)
             response.error(subscription_id)
@@ -149,12 +170,12 @@ class PublisherEndpoint():
     async def _unsubscribe(self, req: Request) -> Response:
         request = xml2siri_request(await req.body())
 
-        subscriber_ref = request.Siri.TerminateSubscriptionRequest.RequestorRef
+        subscriber_ref = request.Siri.TerminateSubscriptionRequest.RequestorRef.text
 
         # check which subscription should be deleted - currently, only all subscriptions by a certain subscriber can be deleted
         subscriptions_to_delete = list()
 
-        for subscription_id, subscription in self._subscriptions.items():
+        for subscription_id, subscription in self._local_node_database.get_subscriptions().items():
             if subscription.subscriber == subscriber_ref:
                 subscriptions_to_delete.append(subscription_id)
 
@@ -162,10 +183,13 @@ class PublisherEndpoint():
         for subscription_id in subscriptions_to_delete:
             try:
                 # delete subscription from subscription stack
-                del self._subscriptions[subscription_id]
+                result = self._local_node_database.remove_subscription(subscription_id)
 
-                # respond with SubscriptionResponse OK
-                response.add_ok(subscriber_ref, subscription_id)
+                # respond with SubscriptionResponse OK or ERROR depending on result
+                if result == True:
+                    response.add_ok(subscriber_ref, subscription_id)
+                else:
+                    response.add_error(subscription_id)
                 
             except Exception:
                 # respond with SubscriptionResponse Error for this subscription
