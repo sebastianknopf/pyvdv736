@@ -1,0 +1,17 @@
+PY_TEST_SUBSCRIBER:
+  host: "127.0.0.1"
+  port: 9090
+  protocol: http
+  status_endpoint: null
+  subscribe_endpoint: null
+  unsubscribe_endpoint: null
+  delivery_endpoint: /delivery
+
+PY_TEST_PUBLISHER:
+  host: "127.0.0.1"
+  port: 9091
+  protocol: http
+  status_endpoint: /status
+  subscribe_endpoint: /subscribe
+  unsubscribe_endpoint: /unsubscribe
+  delivery_endpoint: null

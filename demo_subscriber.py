@@ -6,11 +6,11 @@ from vdv736.subscriber import Subscriber
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
 
-with Subscriber() as subscriber:
+with Subscriber('PY_TEST_SUBSCRIBER', 'demo_participants.yaml') as subscriber:
 
     time.sleep(15)
     
-    sid = subscriber.subscribe('http://127.0.0.1', 9091, 'PY_TEST_SUBSCRIBER')
+    sid = subscriber.subscribe('PY_TEST_PUBLISHER')
 
     time.sleep(10)
 

@@ -2,6 +2,7 @@ import logging
 import requests
 import uuid
 import uvicorn
+import yaml
 
 from .isotime import timestamp
 from .database import local_node_database
@@ -26,10 +27,17 @@ from threading import Thread
 
 class Subscriber():
 
-    def __init__(self):
+    def __init__(self, participant_ref: str, participant_config_filename: str):
+        self._service_participant_ref = participant_ref
         self._logger = logging.getLogger('uvicorn')
 
         self._local_node_database = local_node_database('vdv736.subscriber')
+
+        try:
+            with open(participant_config_filename) as participant_config_file:
+                self._participant_config = yaml.safe_load(participant_config_file)
+        except Exception as ex:
+            self._logger.error(ex)
 
     def __enter__(self):
         self._endpoint_thread = Thread(target=self._run_endpoint, args=(), daemon=True)
@@ -81,17 +89,18 @@ class Subscriber():
 
             return all_subscriptions_ok
 
-    def subscribe(self, publisher_host: str, publisher_port: int, subscriber_ref: str, status_endpoint='/status', subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe') -> str|None:
+    def subscribe(self, participant_ref: str) -> str|None:
 
         subscription_id = str(uuid.uuid4())
-        subscription_host = publisher_host
-        subscription_port = publisher_port
+        subscription_host = self._participant_config[participant_ref]['host']
+        subscription_port = self._participant_config[participant_ref]['port']
+        subscription_protocol = self._participant_config[participant_ref]['protocol']
         subscription_termination = timestamp(60 * 60 * 24)
 
-        subscription = Subscription.create(subscription_id, subscription_host, subscription_port, subscriber_ref, subscription_termination)
-        subscription.status_endpoint = status_endpoint
-        subscription.subscribe_endpoint = subscribe_endpoint
-        subscription.unsubscribe_endpoint = unsubscribe_endpoint
+        subscription = Subscription.create(subscription_id, subscription_host, subscription_port, subscription_protocol, self._service_participant_ref, subscription_termination)
+        subscription.status_endpoint = self._participant_config[participant_ref]['status_endpoint']
+        subscription.subscribe_endpoint = self._participant_config[participant_ref]['subscribe_endpoint']
+        subscription.unsubscribe_endpoint = self._participant_config[participant_ref]['unsubscribe_endpoint']
 
         self._local_node_database.add_subscription(subscription_id, subscription)
 
@@ -143,16 +152,19 @@ class Subscriber():
         logging.getLogger('uvicorn.asgi').propagate = False
 
         # run ASGI server with endpoint
-        uvicorn.run(app=self._endpoint.create_endpoint(), host='127.0.0.1', port=9090)
+        endpoint_host = self._participant_config[self._service_participant_ref]['host']
+        endpoint_port = self._participant_config[self._service_participant_ref]['port']
+
+        uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host=endpoint_host, port=endpoint_port)
 
     def _send_request(self, subscription: Subscription, siri_request: SiriRequest) -> SiriResponse|None:
         try:
             if isinstance(siri_request, CheckStatusRequest):
-                endpoint = f"{subscription.host}:{subscription.port}/{subscription.status_endpoint}"
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{subscription.status_endpoint}"
             elif isinstance(siri_request, SituationExchangeSubscriptionRequest):
-                endpoint = f"{subscription.host}:{subscription.port}/{subscription.subscribe_endpoint}"
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{subscription.subscribe_endpoint}"
             elif isinstance(siri_request, TerminateSubscriptionRequest):
-                endpoint = f"{subscription.host}:{subscription.port}/{subscription.unsubscribe_endpoint}"
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{subscription.unsubscribe_endpoint}"
             
             headers = {
                 "Content-Type": "application/xml"
@@ -178,7 +190,8 @@ class SubscriberEndpoint():
 
         self._local_node_database = local_node_database('vdv736.subscriber')
 
-    def create_endpoint(self, delivery_endpoint='/delivery') -> FastAPI:
+    def create_endpoint(self, participant_ref: str, delivery_endpoint='/delivery') -> FastAPI:
+        self.participant_ref = participant_ref
 
         self._router.add_api_route(delivery_endpoint, self._delivery, methods=['POST'])
         

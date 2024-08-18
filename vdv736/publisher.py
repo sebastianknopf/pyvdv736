@@ -1,6 +1,7 @@
 import logging
 import requests
 import uvicorn
+import yaml
 
 from .isotime import timestamp
 from .database import local_node_database
@@ -24,11 +25,17 @@ from threading import Thread
 
 class Publisher():
 
-    def __init__(self, participant_ref: str):
+    def __init__(self, participant_ref: str, participant_config_filename: str):
         self._service_participant_ref = participant_ref
         self._logger = logging.getLogger('uvicorn')
 
         self._local_node_database = local_node_database('vdv736.publisher')
+
+        try:
+            with open(participant_config_filename) as participant_config_file:
+                self._participant_config = yaml.safe_load(participant_config_file)
+        except Exception as ex:
+            self._logger.error(ex)
 
     def __enter__(self):
         self._endpoint_thread = Thread(target=self._run_endpoint, args=(), daemon=True)
@@ -75,14 +82,21 @@ class Publisher():
         logging.getLogger('uvicorn.asgi').propagate = False
 
         # run ASGI server with endpoint
-        uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host='127.0.0.1', port=9091)
+        endpoint_host = self._participant_config[self._service_participant_ref]['host']
+        endpoint_port = self._participant_config[self._service_participant_ref]['port']
+
+        uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host=endpoint_host, port=endpoint_port)
 
 
     def _send_delivery(self, subscription: Subscription, siri_delivery: SiriServiceDelivery) -> SiriResponse|None:
         try:
+            subscription_host = self._participant_config[subscription.subscriber]['host']
+            subscription_port = self._participant_config[subscription.subscriber]['port']
+            subscription_protocol = self._participant_config[subscription.subscriber]['protocol']
+            
             if isinstance(siri_delivery, SituationExchangeDelivery):
-                #endpoint = f"{subscription.host}:{subscription.port}/{subscription.status_endpoint}"
-                endpoint = f"http://127.0.0.1:9090/delivery"
+                delivery_endpoint = self._participant_config[subscription.subscriber]['delivery_endpoint']
+                endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}/{delivery_endpoint}"
 
             headers = {
                 "Content-Type": "application/xml"
@@ -139,6 +153,7 @@ class PublisherEndpoint():
 
         subscription = Subscription.create(
             subscription_id,
+            None,
             None,
             None,
             request.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriberRef.text,

@@ -7,12 +7,13 @@ from lxml.objectify import ObjectifiedElement
 class Subscription:
 
     @classmethod
-    def create(cls, id: str, host: str, port: int, subscriber: str, termination: str):
+    def create(cls, id: str, host: str, port: int, protocol: str, subscriber: str, termination: str):
 
         obj = cls()
         obj.id = id
         obj.host = host
         obj.port = port
+        obj.protocol = protocol
         obj.subscriber = subscriber
         obj.termination = termination
 
@@ -24,6 +25,7 @@ class Subscription:
         element.id = obj.id
         element.host = obj.host
         element.port = obj.port
+        element.protocol = obj.protocol
         element.subscriber = obj.subscriber
         element.termination = obj.termination
 
@@ -41,6 +43,7 @@ class Subscription:
         obj.id = element.id
         obj.host = element.host
         obj.port = element.port
+        obj.protocol = element.protocol
         obj.subscriber = element.subscriber
         obj.termination = element.termination
 
@@ -54,6 +57,7 @@ class Subscription:
         self.id = None
         self.host = None
         self.port = None
+        self.protocol = None
         self.subscriber = None
         self.termination = None
 
