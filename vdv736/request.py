@@ -42,6 +42,16 @@ class SubscriptionRequest(SiriRequest):
         self.Siri.SubscriptionRequest.RequestorRef = subscriber_ref
 
 
+class ServiceRequest(SiriRequest):
+
+    def __init__(self, subscriber_ref: str):
+        super().__init__()
+
+        self.Siri.ServiceRequest = Element('ServiceRequest')
+        self.Siri.ServiceRequest.RequestTimestamp = timestamp()
+        self.Siri.ServiceRequest.RequestorRef = subscriber_ref
+
+
 class TerminateSubscriptionRequest(SiriRequest):
 
     def __init__(self, subscription: Subscription):
@@ -65,6 +75,15 @@ class SituationExchangeSubscriptionRequest(SubscriptionRequest):
 
         self.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SituationExchangeRequest = Element('SituationExchangeRequest')
         self.Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SituationExchangeRequest.RequestTimestamp = timestamp()
+
+
+class SituationExchangeRequest(ServiceRequest):
+
+    def __init__(self, subscriber_ref: str):
+        super().__init__(subscriber_ref)
+
+        self.Siri.ServiceRequest.SituationExchangeRequest = Element('SituationExchangeRequest', version='2.0')
+        self.Siri.ServiceRequest.SituationExchangeRequest.RequestTimestamp = timestamp()
 
 
 def xml2siri_request(xml: str) -> SiriRequest:

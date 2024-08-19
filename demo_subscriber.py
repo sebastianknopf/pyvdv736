@@ -8,17 +8,20 @@ logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(m
 
 with Subscriber('PY_TEST_SUBSCRIBER', 'demo_participants.yaml') as subscriber:
 
-    time.sleep(15)
+    if len(sys.argv) > 1 and sys.argv[1] == 'ps':
     
-    sid = subscriber.subscribe('PY_TEST_PUBLISHER')
+        time.sleep(15)
+        sid = subscriber.subscribe('PY_TEST_PUBLISHER')
+        time.sleep(10)
+        subscriber.status(sid)
+        time.sleep(10)
+        subscriber.unsubscribe(sid)
 
-    time.sleep(10)
+    else:
 
-    subscriber.status(sid)
-
-    time.sleep(10)
-
-    subscriber.unsubscribe(sid)
+        time.sleep(25)
+        subscriber.request('PY_TEST_PUBLISHER')
+        print(subscriber.get_situations())
 
     while True:
         pass

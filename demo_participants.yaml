@@ -5,6 +5,7 @@ PY_TEST_SUBSCRIBER:
   status_endpoint: null
   subscribe_endpoint: null
   unsubscribe_endpoint: null
+  request_endpoint: null
   delivery_endpoint: /delivery
 
 PY_TEST_PUBLISHER:
@@ -14,4 +15,5 @@ PY_TEST_PUBLISHER:
   status_endpoint: /status
   subscribe_endpoint: /subscribe
   unsubscribe_endpoint: /unsubscribe
+  request_endpoint: /request
   delivery_endpoint: null

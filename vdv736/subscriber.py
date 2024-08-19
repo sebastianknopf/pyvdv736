@@ -14,6 +14,7 @@ from .request import SiriRequest
 from .request import CheckStatusRequest
 from .request import SituationExchangeSubscriptionRequest
 from .request import TerminateSubscriptionRequest
+from .request import SituationExchangeRequest
 from .response import xml2siri_response
 from .response import SiriResponse
 from .response import DataReceivedAcknowledgement
@@ -137,6 +138,25 @@ class Subscriber():
                 self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
 
                 return False
+            
+    def request(self, publisher_ref: str) -> bool:
+
+        # generate SituationExchangeRequest
+        request = SituationExchangeRequest(self._service_participant_ref)
+        delivery = self._send_direct_request(publisher_ref, request)
+
+        if delivery is not None:
+            # process service delivery ...
+            for pts in delivery.Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement:
+                situation_id = pts.SituationNumber.text
+                self._local_node_database.add_situation(situation_id, pts)
+
+            return True
+        else:
+            self._logger.error(f"Failed to request data from {publisher_ref}")
+
+            return False
+
 
     def _run_endpoint(self) -> None:
         self._endpoint = SubscriberEndpoint()
@@ -174,6 +194,28 @@ class Subscriber():
             response = xml2siri_response(response_xml.content)
 
             return response
+        except Exception as ex:
+            self._logger.error(ex)
+            return None
+        
+    def _send_direct_request(self, publisher_ref: str, siri_request: SiriRequest) -> SituationExchangeDelivery|None:
+        try:
+            subscription_host = self._participant_config[publisher_ref]['host']
+            subscription_port = self._participant_config[publisher_ref]['port']
+            subscription_protocol = self._participant_config[publisher_ref]['protocol']
+            
+            if isinstance(siri_request, SituationExchangeRequest):
+                request_endpoint = self._participant_config[publisher_ref]['request_endpoint']
+                endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}/{request_endpoint}"
+            
+            headers = {
+                "Content-Type": "application/xml"
+            }
+            
+            response_xml = requests.post(endpoint, headers=headers, data=siri_request.xml())
+            delivery = xml2siri_delivery(response_xml.content)
+
+            return delivery
         except Exception as ex:
             self._logger.error(ex)
             return None

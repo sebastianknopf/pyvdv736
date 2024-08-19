@@ -5,7 +5,7 @@ import yaml
 
 from .isotime import timestamp
 from .database import local_node_database
-from .delivery import SiriServiceDelivery
+from .delivery import ServiceDelivery
 from .delivery import SituationExchangeDelivery
 from .model import PublicTransportSituation
 from .model import Subscription
@@ -54,10 +54,10 @@ class Publisher():
             self._local_node_database.close(True)
     
     def publish_situation(self, situation: PublicTransportSituation) -> None:
+        situation_id = situation.SituationNumber.text
+        self._local_node_database.add_situation(situation_id, situation)
+        
         for _, subscription in self._local_node_database.get_subscriptions().items():
-            situation_id = situation.SituationNumber.text
-            self._local_node_database.add_situation(situation_id, situation)
-
             delivery = SituationExchangeDelivery(self._service_participant_ref, subscription)
             delivery.add_situation(situation)
 
@@ -69,7 +69,7 @@ class Publisher():
                 self._logger.error(f"Failed to send delivery for subscription {subscription.id} to {subscription.subscriber}")
 
     def _run_endpoint(self) -> None:
-        self._endpoint = PublisherEndpoint()
+        self._endpoint = PublisherEndpoint(self._service_participant_ref)
 
         # disable uvicorn logs
         logging.getLogger('uvicorn.error').handlers = []
@@ -88,7 +88,7 @@ class Publisher():
         uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host=endpoint_host, port=endpoint_port)
 
 
-    def _send_delivery(self, subscription: Subscription, siri_delivery: SiriServiceDelivery) -> SiriResponse|None:
+    def _send_delivery(self, subscription: Subscription, siri_delivery: ServiceDelivery) -> SiriResponse|None:
         try:
             subscription_host = self._participant_config[subscription.subscriber]['host']
             subscription_port = self._participant_config[subscription.subscriber]['port']
@@ -114,7 +114,8 @@ class Publisher():
 
 class PublisherEndpoint():
 
-    def __init__(self):
+    def __init__(self, participant_ref: str):
+        self._service_participant_ref = participant_ref
         self._service_started_time = timestamp()
         self._logger = logging.getLogger('uvicorn')
 
@@ -123,12 +124,13 @@ class PublisherEndpoint():
 
         self._local_node_database = local_node_database('vdv736.publisher')
 
-    def create_endpoint(self, participant_ref: str, status_endpoint='/status', subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe') -> FastAPI:
+    def create_endpoint(self, participant_ref: str, status_endpoint='/status', subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe', request_endpoint='/request') -> FastAPI:
         self._participant_ref = participant_ref
 
         self._router.add_api_route(status_endpoint, self._status, methods=['POST'])
         self._router.add_api_route(subscribe_endpoint, self._subscribe, methods=['POST'])
         self._router.add_api_route(unsubscribe_endpoint, self._unsubscribe, methods=['POST'])
+        self._router.add_api_route(request_endpoint, self._request, methods=['POST'])
         
         self._endpoint.include_router(self._router)
 
@@ -211,4 +213,18 @@ class PublisherEndpoint():
                 response.add_error(subscriber_ref, subscription_id)
 
         return Response(content=response.xml(), media_type='application/xml')
+
+    async def _request(self, req: Request) -> Response:
+        request = xml2siri_request(await req.body())
+
+        delivery = SituationExchangeDelivery(self._service_participant_ref, None)
+
+        for _, situation in self._local_node_database.get_situations().items():
+            delivery.add_situation(situation)
+
+        return Response(content=delivery.xml(), media_type='application/xml')    
+
+        
+
+
 
