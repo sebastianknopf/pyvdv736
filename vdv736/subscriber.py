@@ -1,5 +1,6 @@
 import logging
 import requests
+import sirixml
 import uuid
 import uvicorn
 import yaml
@@ -66,7 +67,7 @@ class Subscriber():
             request = CheckStatusRequest(subscription)
             response = self._send_request(subscription, request)
 
-            if response is not None and response.Siri.CheckStatusResponse.Status == True:
+            if sirixml.get_value(response, 'Siri.CheckStatusResponse.Status', False):
                 self._logger.info(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
                 return True
             else:
@@ -80,7 +81,7 @@ class Subscriber():
                 request = CheckStatusRequest(subscription)
                 response = self._send_request(subscription, request)
 
-                if response is not None and response.Siri.CheckStatusResponse.Status == True:
+                if sirixml.get_value(response, 'Siri.CheckStatusResponse.Status', False):
                     self._logger.info(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
                 else:
                     self._logger.error(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
@@ -108,7 +109,7 @@ class Subscriber():
         request = SituationExchangeSubscriptionRequest(subscription)
         response = self._send_request(subscription, request)
 
-        if response.Siri.SubscriptionResponse.ResponseStatus.Status == True:
+        if sirixml.get_value(response, 'Siri.SubscriptionResponse.ResponseStatus.Status', True):
             self._logger.info(f"Initialized subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
 
             return subscription_id
@@ -127,7 +128,7 @@ class Subscriber():
         response = self._send_request(subscription, request)
 
         # check each termination subscription response for success
-        for termination_response_status in response.Siri.TerminationSubscriptionResponse.TerminationResponseStatus:
+        for termination_response_status in sirixml.get_elements(response, 'Siri.TerminationSubscriptionResponse.TerminationResponseStatus'):
             if termination_response_status.Status == True:
                 self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
                 
@@ -147,8 +148,8 @@ class Subscriber():
 
         if delivery is not None:
             # process service delivery ...
-            for pts in delivery.Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement:
-                situation_id = pts.SituationNumber.text
+            for pts in sirixml.get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
+                situation_id = sirixml.get_value(pts, 'SituationNumber')
                 self._local_node_database.add_situation(situation_id, pts)
 
             return True
@@ -249,12 +250,16 @@ class SubscriberEndpoint():
             delivery = xml2siri_delivery(await req.body())
 
             # process service delivery ...
-            for pts in delivery.Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement:
+            for pts in sirixml.get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
                 situation_id = pts.SituationNumber.text
                 self._local_node_database.add_situation(situation_id, pts)
 
             # create data acknowledgement with OK status
-            acknowledgement = DataReceivedAcknowledgement(delivery.Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef, delivery.Siri.ServiceDelivery.ResponseMessageIdentifier)
+            acknowledgement = DataReceivedAcknowledgement(
+                sirixml.get_value(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef'), 
+                sirixml.get_value(delivery, 'Siri.ServiceDelivery.ResponseMessageIdentifier')
+            )
+
             acknowledgement.ok()
 
             return Response(content=acknowledgement.xml(), media_type='application/xml')
@@ -262,7 +267,11 @@ class SubscriberEndpoint():
             self._logger.error(ex)
 
             # create data acknowledgement
-            acknowledgement = DataReceivedAcknowledgement(delivery.Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef, delivery.Siri.ServiceDelivery.ResponseMessageIdentifier)
+            acknowledgement = DataReceivedAcknowledgement(
+                sirixml.get_value(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef'), 
+                sirixml.get_value(delivery, 'Siri.ServiceDelivery.ResponseMessageIdentifier')
+            )
+
             acknowledgement.error()
 
             return Response(content=acknowledgement.xml(), media_type='application/xml')

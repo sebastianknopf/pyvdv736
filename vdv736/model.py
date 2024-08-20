@@ -1,3 +1,4 @@
+from typing import Any
 from lxml.etree import tostring
 from lxml.objectify import fromstring
 from lxml.objectify import Element
@@ -86,3 +87,15 @@ class PublicTransportSituation(ObjectifiedElement):
     def unserialize(cls, xml: str):
         obj = fromstring(xml)
         return obj
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __eq__(self, other):
+        return self.equals(other)
+
+    def __copy__(self):
+        return PublicTransportSituation(super().__copy__())
+
+    def __deepcopy__(self, memo=None):
+        return PublicTransportSituation(super().__deepcopy__(memo))
