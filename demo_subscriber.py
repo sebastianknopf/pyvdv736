@@ -16,6 +16,11 @@ with Subscriber('PY_TEST_SUBSCRIBER', 'demo_participants.yaml') as subscriber:
         subscriber.status(sid)
         time.sleep(10)
         subscriber.unsubscribe(sid)
+        sid = subscriber.subscribe('PY_TEST_PUBLISHER')
+
+        while True:
+            time.sleep(60)
+            subscriber.status()
 
     else:
 
@@ -23,5 +28,5 @@ with Subscriber('PY_TEST_SUBSCRIBER', 'demo_participants.yaml') as subscriber:
         subscriber.request('PY_TEST_PUBLISHER')
         print(subscriber.get_situations())
 
-    while True:
-        pass
+        while True:
+            pass

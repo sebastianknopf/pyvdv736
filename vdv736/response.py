@@ -36,7 +36,7 @@ class CheckStatusResponse(SiriResponse):
 
 class SubscriptionResponse(SiriResponse):
 
-    def __init__(self, responder_ref: str):
+    def __init__(self, responder_ref: str, service_started_time: str = None):
         super().__init__()
 
         self.Siri.SubscriptionResponse = Element('SubscriptionResponse')
@@ -45,7 +45,10 @@ class SubscriptionResponse(SiriResponse):
         self.Siri.SubscriptionResponse.ResponseStatus = Element('ResponseStatus')
 
         self.Siri.SubscriptionResponse.ResponseTimestamp = timestamp()
-        self.Siri.SubscriptionResponse.ResponderRef = responder_ref        
+        self.Siri.SubscriptionResponse.ResponderRef = responder_ref
+
+        if service_started_time is not None:
+            self.Siri.SubscriptionResponse.ResponseStatus.ServiceStartedTime = service_started_time        
 
     def ok(self, subscription_id: str, subscription_termination: str):
 

@@ -17,4 +17,4 @@ with Publisher('PY_TEST_PUBLISHER', 'demo_participants.yaml') as publisher:
     time.sleep(20)
 
     while True:
-        pass
+        pass  

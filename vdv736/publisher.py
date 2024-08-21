@@ -1,6 +1,6 @@
 import logging
 import requests
-import sirixml
+import time
 import uvicorn
 import yaml
 
@@ -16,6 +16,8 @@ from .response import SiriResponse
 from .response import CheckStatusResponse
 from .response import SubscriptionResponse
 from .response import TerminateSubscriptionResponse
+from .sirixml import get_elements as sirixml_get_elements
+from .sirixml import get_value as sirixml_get_value
 
 from fastapi import FastAPI
 from fastapi import APIRouter
@@ -49,13 +51,13 @@ class Publisher():
             self._endpoint.terminate()
         
         if self._endpoint_thread is not None:
-            self._endpoint_thread.join(5)
+            self._endpoint_thread.join(1)
 
         if self._local_node_database is not None:
             self._local_node_database.close(True)
     
     def publish_situation(self, situation: PublicTransportSituation) -> None:
-        situation_id = sirixml.get_value(situation, 'SituationNumber')
+        situation_id = sirixml_get_value(situation, 'SituationNumber')
         self._local_node_database.add_situation(situation_id, situation)
         
         for _, subscription in self._local_node_database.get_subscriptions().items():
@@ -64,7 +66,7 @@ class Publisher():
 
             response = self._send_delivery(subscription, delivery)
 
-            if sirixml.get_value(response, 'Siri.DataReceivedAcknowledgement.Status', False):
+            if sirixml_get_value(response, 'Siri.DataReceivedAcknowledgement.Status', False):
                 self._logger.info(f"Sent delivery for subscription {subscription.id} to {subscription.subscriber} successfully")
             else:
                 self._logger.error(f"Failed to send delivery for subscription {subscription.id} to {subscription.subscriber}")
@@ -86,8 +88,7 @@ class Publisher():
         endpoint_host = self._participant_config[self._service_participant_ref]['host']
         endpoint_port = self._participant_config[self._service_participant_ref]['port']
 
-        uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host=endpoint_host, port=endpoint_port)
-
+        uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host=endpoint_host, port=endpoint_port)        
 
     def _send_delivery(self, subscription: Subscription, siri_delivery: ServiceDelivery) -> SiriResponse|None:
         try:
@@ -117,7 +118,7 @@ class PublisherEndpoint():
 
     def __init__(self, participant_ref: str):
         self._service_participant_ref = participant_ref
-        self._service_started_time = timestamp()
+        self._service_startup_time = timestamp()
         self._logger = logging.getLogger('uvicorn')
 
         self._router = APIRouter()
@@ -144,22 +145,22 @@ class PublisherEndpoint():
         request = xml2siri_request(await req.body())
 
         # simply respond with current status
-        response = CheckStatusResponse(self._service_started_time)
+        response = CheckStatusResponse(self._service_startup_time)
         return Response(content=response.xml(), media_type='application/xml')
 
     async def _subscribe(self, req: Request) -> Response:
         request = xml2siri_request(await req.body())
 
         # add subscription parameters to subscription index
-        subscription_id = sirixml.get_value(request, 'Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriptionIdentifier')
-        subscription_termination = sirixml.get_value(request, 'Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.InitialTerminationTime')
+        subscription_id = sirixml_get_value(request, 'Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriptionIdentifier')
+        subscription_termination = sirixml_get_value(request, 'Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.InitialTerminationTime')
 
         subscription = Subscription.create(
             subscription_id,
             None,
             None,
             None,
-            sirixml.get_value(request, 'Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriberRef'),
+            sirixml_get_value(request, 'Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriberRef'),
             subscription_termination
         )
             
@@ -167,7 +168,7 @@ class PublisherEndpoint():
             result = self._local_node_database.add_subscription(subscription_id, subscription)
 
             # respond with SubscriptionResponse OK
-            response = SubscriptionResponse(self._participant_ref)
+            response = SubscriptionResponse(self._participant_ref, self._service_startup_time)
 
             if result == True:
                 response.ok(subscription_id, subscription_termination)
@@ -180,7 +181,7 @@ class PublisherEndpoint():
             self._logger.error(ex)
 
             # respond with SubscriptionResponse Error
-            response = SubscriptionResponse(self._participant_ref)
+            response = SubscriptionResponse(self._participant_ref, self._service_startup_time)
             response.error(subscription_id)
 
             return Response(content=response.xml(), media_type='application/xml')
@@ -188,7 +189,7 @@ class PublisherEndpoint():
     async def _unsubscribe(self, req: Request) -> Response:
         request = xml2siri_request(await req.body())
 
-        subscriber_ref = sirixml.get_value(request, 'Siri.TerminateSubscriptionRequest.RequestorRef')
+        subscriber_ref = sirixml_get_value(request, 'Siri.TerminateSubscriptionRequest.RequestorRef')
 
         # check which subscription should be deleted - currently, only all subscriptions by a certain subscriber can be deleted
         subscriptions_to_delete = list()

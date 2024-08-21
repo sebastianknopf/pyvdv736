@@ -30,6 +30,9 @@ class Subscription:
         element.subscriber = obj.subscriber
         element.termination = obj.termination
 
+        element.remote_service_participant_ref = obj.remote_service_participant_ref
+        element.remote_service_startup_time = obj.remote_service_startup_time
+
         element.status_endpoint = obj.status_endpoint
         element.subscribe_endpoint = obj.subscribe_endpoint
         element.unsubscribe_endpoint = obj.unsubscribe_endpoint
@@ -41,16 +44,19 @@ class Subscription:
         element = fromstring(xml)
 
         obj = cls()
-        obj.id = element.id
-        obj.host = element.host
-        obj.port = element.port
-        obj.protocol = element.protocol
-        obj.subscriber = element.subscriber
-        obj.termination = element.termination
+        obj.id = element.id.text
+        obj.host = element.host.text
+        obj.port = element.port.text
+        obj.protocol = element.protocol.text
+        obj.subscriber = element.subscriber.text
+        obj.termination = element.termination.text
 
-        obj.status_endpoint = element.status_endpoint
-        obj.subscribe_endpoint = element.subscribe_endpoint
-        obj.unsubscribe_endpoint = element.unsubscribe_endpoint
+        obj.remote_service_participant_ref = element.remote_service_participant_ref.text
+        obj.remote_service_startup_time = element.remote_service_startup_time.text
+
+        obj.status_endpoint = element.status_endpoint.text
+        obj.subscribe_endpoint = element.subscribe_endpoint.text
+        obj.unsubscribe_endpoint = element.unsubscribe_endpoint.text
 
         return obj
     
@@ -61,6 +67,9 @@ class Subscription:
         self.protocol = None
         self.subscriber = None
         self.termination = None
+
+        self.remote_service_participant_ref = None
+        self.remote_service_startup_time = None
 
         self.status_endpoint = '/status'
         self.subscribe_endpoint = '/subscribe'

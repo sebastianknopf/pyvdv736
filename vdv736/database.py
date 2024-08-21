@@ -54,7 +54,7 @@ class LocalNodeDatabase:
             serialized = Subscription.serialize(subscription)
             
             cursor = self._connection.cursor()
-            cursor.execute("UPDATE subscriptions SET serialized = ? WHERE subscription_id = ?", (
+            cursor.execute("UPDATE subscriptions SET serialized = ? WHERE id = ?", (
                 serialized, 
                 subscription_id
             ))

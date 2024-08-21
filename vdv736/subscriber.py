@@ -1,6 +1,5 @@
 import logging
 import requests
-import sirixml
 import uuid
 import uvicorn
 import yaml
@@ -19,6 +18,9 @@ from .request import SituationExchangeRequest
 from .response import xml2siri_response
 from .response import SiriResponse
 from .response import DataReceivedAcknowledgement
+from .sirixml import exists as sirixml_exists
+from .sirixml import get_elements as sirixml_get_elements
+from .sirixml import get_value as sirixml_get_value
 
 from fastapi import FastAPI
 from fastapi import APIRouter
@@ -52,7 +54,7 @@ class Subscriber():
             self._endpoint.terminate()
         
         if self._endpoint_thread is not None:
-            self._endpoint_thread.join(5)
+            self._endpoint_thread.join(1)
 
         if self._local_node_database is not None:
             self._local_node_database.close(True)
@@ -62,34 +64,40 @@ class Subscriber():
 
     def status(self, subscription_id=None) -> bool:
         if subscription_id is not None:
-            subscription = self._local_node_database.get_subscriptions()[subscription_id]
-
-            request = CheckStatusRequest(subscription)
-            response = self._send_request(subscription, request)
-
-            if sirixml.get_value(response, 'Siri.CheckStatusResponse.Status', False):
-                self._logger.info(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
-                return True
-            else:
-                self._logger.error(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
-                
-                subscription.healthy = False
-                return False
+            return self._status(subscription_id)
         else:
             all_subscriptions_ok = True
-            for subscription_id, subscription in self._local_node_database.get_subscriptions().items():
-                request = CheckStatusRequest(subscription)
-                response = self._send_request(subscription, request)
-
-                if sirixml.get_value(response, 'Siri.CheckStatusResponse.Status', False):
-                    self._logger.info(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
-                else:
-                    self._logger.error(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
-                    
-                    subscription.healthy = False
+            for subscription_id, _ in self._local_node_database.get_subscriptions().items():
+                if self._status(subscription_id) != True:
                     all_subscriptions_ok = False
 
             return all_subscriptions_ok
+        
+    def _status(self, subscription_id: str) -> bool:
+        subscription = self._local_node_database.get_subscriptions()[subscription_id]
+
+        request = CheckStatusRequest(subscription)
+        response = self._send_request(subscription, request)
+
+        if sirixml_get_value(response, 'Siri.CheckStatusResponse.Status', False):
+            if subscription.remote_service_startup_time is not None:
+                if sirixml_get_value(response, 'Siri.CheckStatusResponse.ServiceStartedTime') == subscription.remote_service_startup_time:
+                    self._logger.info(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
+                    return True
+                else:
+                    self._logger.warn(f"Remote server for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} seems to be restarted")
+                    
+                    self.unsubscribe(subscription.id)
+                    return self.subscribe(subscription.remote_service_participant_ref) is not None
+            else:
+                subscription.remote_service_startup_time = sirixml_get_value(response, 'Siri.CheckStatusResponse.ServiceStartedTime')
+                self._local_node_database.update_subscription(subscription_id, subscription)
+
+                self._logger.info(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
+                return True
+        else:
+            self._logger.error(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} FAIL")
+            return False
 
     def subscribe(self, participant_ref: str) -> str|None:
 
@@ -104,13 +112,19 @@ class Subscriber():
         subscription.subscribe_endpoint = self._participant_config[participant_ref]['subscribe_endpoint']
         subscription.unsubscribe_endpoint = self._participant_config[participant_ref]['unsubscribe_endpoint']
 
-        self._local_node_database.add_subscription(subscription_id, subscription)
+        subscription.remote_service_participant_ref = participant_ref
 
         request = SituationExchangeSubscriptionRequest(subscription)
         response = self._send_request(subscription, request)
 
-        if sirixml.get_value(response, 'Siri.SubscriptionResponse.ResponseStatus.Status', True):
+        if sirixml_get_value(response, 'Siri.SubscriptionResponse.ResponseStatus.Status', True):
             self._logger.info(f"Initialized subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
+
+            service_started_time = sirixml_get_value(response, 'Siri.SubscriptionResponse.ResponseStatus.ServiceStartedTime')
+            if service_started_time is not None:
+                subscription.remote_service_startup_time = service_started_time
+                
+            self._local_node_database.add_subscription(subscription_id, subscription)
 
             return subscription_id
         else:
@@ -122,23 +136,27 @@ class Subscriber():
         
         # take subscription instance from subscription stack
         subscription = self._local_node_database.get_subscriptions()[subscription_id]
+
+        # delete subscription out of local database
+        self._local_node_database.remove_subscription(subscription_id)
         
         # create termination request here ...
-        request = TerminateSubscriptionRequest(subscription)
+        request = TerminateSubscriptionRequest(self._service_participant_ref)
         response = self._send_request(subscription, request)
 
         # check each termination subscription response for success
-        for termination_response_status in sirixml.get_elements(response, 'Siri.TerminationSubscriptionResponse.TerminationResponseStatus'):
-            if termination_response_status.Status == True:
-                self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
-                
-                self._local_node_database.remove_subscription(subscription_id)
-
-                return True
-            else:
-                self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
-
-                return False
+        if sirixml_exists(response, 'Siri.TerminationSubscriptionResponse.TerminationResponseStatus'):
+            for termination_response_status in sirixml_get_elements(response, 'Siri.TerminationSubscriptionResponse.TerminationResponseStatus'):
+                if termination_response_status.Status == True:
+                    self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
+                    return True
+                else:
+                    self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
+                    return False
+        else:
+            # publisher returns no termination status at all, that means, there were no subscriptions at publisher side ... good anyway
+            self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
+            return True
             
     def request(self, publisher_ref: str) -> bool:
 
@@ -148,8 +166,8 @@ class Subscriber():
 
         if delivery is not None:
             # process service delivery ...
-            for pts in sirixml.get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
-                situation_id = sirixml.get_value(pts, 'SituationNumber')
+            for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
+                situation_id = sirixml_get_value(pts, 'SituationNumber')
                 self._local_node_database.add_situation(situation_id, pts)
 
             return True
@@ -160,7 +178,7 @@ class Subscriber():
 
 
     def _run_endpoint(self) -> None:
-        self._endpoint = SubscriberEndpoint()
+        self._endpoint = SubscriberEndpoint(self._service_participant_ref)
 
         # disable uvicorn logs
         logging.getLogger('uvicorn.error').handlers = []
@@ -224,8 +242,9 @@ class Subscriber():
 
 class SubscriberEndpoint():
 
-    def __init__(self):
-        self._service_started_time = timestamp()
+    def __init__(self, participant_ref: str):
+        self._service_participant_ref = participant_ref
+        self._service_startup_time = timestamp()
         self._logger = logging.getLogger('uvicorn')
 
         self._router = APIRouter()
@@ -250,14 +269,14 @@ class SubscriberEndpoint():
             delivery = xml2siri_delivery(await req.body())
 
             # process service delivery ...
-            for pts in sirixml.get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
-                situation_id = pts.SituationNumber.text
+            for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
+                situation_id = sirixml_get_value(pts, 'SituationNumber')
                 self._local_node_database.add_situation(situation_id, pts)
 
             # create data acknowledgement with OK status
             acknowledgement = DataReceivedAcknowledgement(
-                sirixml.get_value(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef'), 
-                sirixml.get_value(delivery, 'Siri.ServiceDelivery.ResponseMessageIdentifier')
+                sirixml_get_value(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef'), 
+                sirixml_get_value(delivery, 'Siri.ServiceDelivery.ResponseMessageIdentifier')
             )
 
             acknowledgement.ok()
@@ -268,8 +287,8 @@ class SubscriberEndpoint():
 
             # create data acknowledgement
             acknowledgement = DataReceivedAcknowledgement(
-                sirixml.get_value(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef'), 
-                sirixml.get_value(delivery, 'Siri.ServiceDelivery.ResponseMessageIdentifier')
+                sirixml_get_value(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef'), 
+                sirixml_get_value(delivery, 'Siri.ServiceDelivery.ResponseMessageIdentifier')
             )
 
             acknowledgement.error()

@@ -54,12 +54,13 @@ class ServiceRequest(SiriRequest):
 
 class TerminateSubscriptionRequest(SiriRequest):
 
-    def __init__(self, subscription: Subscription):
+    def __init__(self, subscriber_ref: str):
         super().__init__()
 
         self.Siri.TerminateSubscriptionRequest = Element('TerminateSubscriptionRequest')
         self.Siri.TerminateSubscriptionRequest.RequestTimestamp = timestamp()
-        self.Siri.TerminateSubscriptionRequest.RequestorRef = subscription.subscriber
+        self.Siri.TerminateSubscriptionRequest.RequestorRef = subscriber_ref
+
         self.Siri.TerminateSubscriptionRequest.All = Element('All')
 
 
