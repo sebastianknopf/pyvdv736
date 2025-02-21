@@ -44,8 +44,8 @@ def get_attribute(obj, path, default=None):
         for element in path[:-1]:
             destination = getattr(destination, element)
             
-        if hasattr(destination, 'attr') and path[-1] in destination.attr:
-            return destination.get(path[-1])
+        if hasattr(destination, 'attrib') and path[-1] in destination.attrib:
+            return destination.attrib[(path[-1])]
         else:
             return default
             
