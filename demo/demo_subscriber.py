@@ -6,7 +6,7 @@ from vdv736.subscriber import Subscriber
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
 
-with Subscriber('PY_TEST_SUBSCRIBER', 'demo_participants.yaml') as subscriber:
+with Subscriber('PY_TEST_SUBSCRIBER', './demo/demo_participants.yaml') as subscriber:
 
     if len(sys.argv) > 1 and sys.argv[1] == 'ps':
     
