@@ -1,6 +1,7 @@
 import logging
 import requests
 import uuid
+import time
 import uvicorn
 import yaml
 
@@ -47,6 +48,9 @@ class Subscriber():
         self._endpoint_thread = Thread(target=self._run_endpoint, args=(), daemon=True)
         self._endpoint_thread.start()
 
+        time.sleep(0.01) # give the endpoint thread time for startup
+        self._logger.info(f"Subscriber running at {self._participant_config[self._service_participant_ref]['host']}:{self._participant_config[self._service_participant_ref]['port']}")
+
         return self
 
     def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
@@ -82,10 +86,10 @@ class Subscriber():
         if sirixml_get_value(response, 'Siri.CheckStatusResponse.Status', False):
             if subscription.remote_service_startup_time is not None:
                 if sirixml_get_value(response, 'Siri.CheckStatusResponse.ServiceStartedTime') == subscription.remote_service_startup_time:
-                    self._logger.info(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
+                    self._logger.info(f"Status for subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} OK")
                     return True
                 else:
-                    self._logger.warn(f"Remote server for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} seems to be restarted")
+                    self._logger.warn(f"Remote server for subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} seems to be restarted")
                     
                     self.unsubscribe(subscription.id)
                     return self.subscribe(subscription.remote_service_participant_ref) is not None
@@ -93,10 +97,10 @@ class Subscriber():
                 subscription.remote_service_startup_time = sirixml_get_value(response, 'Siri.CheckStatusResponse.ServiceStartedTime')
                 self._local_node_database.update_subscription(subscription_id, subscription)
 
-                self._logger.info(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} OK")
+                self._logger.info(f"Status for subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} OK")
                 return True
         else:
-            self._logger.error(f"Status for subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} FAIL")
+            self._logger.error(f"Status for subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} FAIL")
             return False
 
     def subscribe(self, participant_ref: str) -> str|None:
@@ -118,7 +122,7 @@ class Subscriber():
         response = self._send_request(subscription, request)
 
         if sirixml_get_value(response, 'Siri.SubscriptionResponse.ResponseStatus.Status', True):
-            self._logger.info(f"Initialized subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
+            self._logger.info(f"Initialized subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} successfully")
 
             service_started_time = sirixml_get_value(response, 'Siri.SubscriptionResponse.ResponseStatus.ServiceStartedTime')
             if service_started_time is not None:
@@ -128,7 +132,7 @@ class Subscriber():
 
             return subscription_id
         else:
-            self._logger.error(f"Failed to initalize subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
+            self._logger.error(f"Failed to initalize subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber}")
 
             return None
         
@@ -148,14 +152,14 @@ class Subscriber():
         if sirixml_exists(response, 'Siri.TerminationSubscriptionResponse.TerminationResponseStatus'):
             for termination_response_status in sirixml_get_elements(response, 'Siri.TerminationSubscriptionResponse.TerminationResponseStatus'):
                 if termination_response_status.Status == True:
-                    self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
+                    self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} successfully")
                     return True
                 else:
-                    self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber}")
+                    self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber}")
                     return False
         else:
             # publisher returns no termination status at all, that means, there were no subscriptions at publisher side ... good anyway
-            self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.host}:{subscription.port} as {subscription.subscriber} successfully")
+            self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} successfully")
             return True
             
     def request(self, publisher_ref: str) -> bool:

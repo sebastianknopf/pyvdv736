@@ -7,20 +7,17 @@ from vdv736.request import SiriRequest
 from vdv736.request import SubscriptionRequest
 from vdv736.request import SituationExchangeSubscriptionRequest
 
+from vdv736.sirixml import get_value as sirixml_get_value
+from vdv736.sirixml import get_attribute as sirixml_get_attribue
+
 
 class SiriRequest_Test(unittest.TestCase):
     def test_SiriRequest(self):
 
-        request = SiriRequest(
-            'http://127.0.0.1', 
-            8080,
-            '/subscribe'
-        )
-        
+        request = SiriRequest()
+
         self.assertIsNotNone(request.xml())
-        self.assertIsNotNone(request._xml.getroot())
-        self.assertEqual(request._xml.getroot().attrib.get('version'), '2.0')
-        self.assertEqual(request._address, 'http://127.0.0.1:8080/subscribe')
+        self.assertEqual(sirixml_get_attribue(request, 'Siri.version'), '2.0')
 
 
 class SubscriptionRequest_Test(unittest.TestCase):
@@ -29,14 +26,11 @@ class SubscriptionRequest_Test(unittest.TestCase):
         subscriber_ref = 'PY_TEST_SUBSCRIBER'
         
         request = SubscriptionRequest(
-            'http://127.0.0.1', 
-            8080, 
-            subscriber_ref,
-            '/subscribe'
+            subscriber_ref
         )
         
         self.assertIsNotNone(request.xml())
-        self.assertEqual(request._xml.getroot().find('.//SubscriptionRequest/RequestorRef').text, subscriber_ref)
+        self.assertEqual(sirixml_get_value(request, 'Siri.SubscriptionRequest.RequestorRef'), subscriber_ref)
 
 
 class SituationExchangeSubscriptionRequest_Test(unittest.TestCase):
@@ -46,11 +40,19 @@ class SituationExchangeSubscriptionRequest_Test(unittest.TestCase):
         subscription_id = str(uuid.uuid4())
         subscription_termination = timestamp(60 * 60 * 24)
         
-        subscription = Subscription(subscription_id, 'http://127.0.0.1', 8080, subscriber_ref, timestamp(60 * 60 * 24))
+        subscription = Subscription.create(
+            subscription_id, 
+            'http://127.0.0.1', 
+            8080, 
+            'https',
+            subscriber_ref, 
+            timestamp(60 * 60 * 24)
+        )
+
         request = SituationExchangeSubscriptionRequest(subscription)
         
         self.assertIsNotNone(request.xml())
-        self.assertEqual(request._xml.getroot().find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest/SubscriberRef').text, subscriber_ref)
-        self.assertEqual(request._xml.getroot().find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest/SubscriptionIdentifier').text, subscription_id)
-        self.assertEqual(request._xml.getroot().find('.//SubscriptionRequest/SituationExchangeSubscriptionRequest/InitialTerminationTime').text, subscription_termination)
+        self.assertEqual(sirixml_get_value(request, 'Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriberRef'), subscriber_ref)
+        self.assertEqual(sirixml_get_value(request, 'Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriptionIdentifier'), subscription_id)
+        self.assertEqual(sirixml_get_value(request, 'Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.InitialTerminationTime'), subscription_termination)
 
