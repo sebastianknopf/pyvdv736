@@ -19,11 +19,6 @@ requires-python = ">=3.10"
 
 dynamic = ["version"]
 
-[project.optional-dependencies]
-test = [
-    "unittest"
-]
-
 [tool.setuptools]
 packages = ["vdv736"]
 
