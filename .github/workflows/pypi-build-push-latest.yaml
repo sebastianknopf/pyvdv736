@@ -1,7 +1,8 @@
 name: PyPI Wheel Latest CI
 on:
   push:
-    branches: ["main"]
+    tags:
+      - '*'
 
 jobs:
   build:
