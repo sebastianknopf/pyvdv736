@@ -44,6 +44,9 @@ class Publisher():
         self._endpoint_thread = Thread(target=self._run_endpoint, args=(), daemon=True)
         self._endpoint_thread.start()
 
+        time.sleep(0.01) # give the endpoint thread time for startup
+        self._logger.info(f"Publisher running at {self._participant_config[self._service_participant_ref]['host']}:{self._participant_config[self._service_participant_ref]['port']}")
+
         return self
 
     def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
@@ -88,7 +91,7 @@ class Publisher():
         endpoint_host = self._participant_config[self._service_participant_ref]['host']
         endpoint_port = self._participant_config[self._service_participant_ref]['port']
 
-        uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host=endpoint_host, port=endpoint_port)        
+        uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host=endpoint_host, port=endpoint_port)
 
     def _send_delivery(self, subscription: Subscription, siri_delivery: ServiceDelivery) -> SiriResponse|None:
         try:
