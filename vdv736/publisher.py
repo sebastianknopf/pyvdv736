@@ -2,7 +2,6 @@ import logging
 import requests
 import time
 import uvicorn
-import yaml
 
 from .isotime import timestamp
 from .database import local_node_database
@@ -100,7 +99,7 @@ class Publisher():
             subscription_protocol = self._participant_config.participants[subscription.subscriber]['protocol']
             
             if isinstance(siri_delivery, SituationExchangeDelivery):
-                delivery_endpoint = self._participant_config.participants[subscription.subscriber]['delivery_endpoint']
+                delivery_endpoint = self._participant_config.participants[subscription.subscriber]['single_endpoint'] if self._participant_config.participants[subscription.subscriber]['single_endpoint'] is not None else self._participant_config.participants[subscription.subscriber]['delivery_endpoint']
                 endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}/{delivery_endpoint}"
 
             headers = {
@@ -129,13 +128,16 @@ class PublisherEndpoint():
 
         self._local_node_database = local_node_database('vdv736.publisher')
 
-    def create_endpoint(self, participant_ref: str, status_endpoint='/status', subscribe_endpoint='/subscribe', unsubscribe_endpoint='/unsubscribe', request_endpoint='/request') -> FastAPI:
+    def create_endpoint(self, participant_ref: str, single_endpoint: str|None = None, status_endpoint: str = '/status', subscribe_endpoint: str = '/subscribe', unsubscribe_endpoint: str = '/unsubscribe', request_endpoint: str = '/request') -> FastAPI:
         self._participant_ref = participant_ref
 
-        self._router.add_api_route(status_endpoint, self._status, methods=['POST'])
-        self._router.add_api_route(subscribe_endpoint, self._subscribe, methods=['POST'])
-        self._router.add_api_route(unsubscribe_endpoint, self._unsubscribe, methods=['POST'])
-        self._router.add_api_route(request_endpoint, self._request, methods=['POST'])
+        if single_endpoint is not None:
+            self._router.add_api_route(single_endpoint, self._dispatcher, methods=['POST'])
+        else:
+            self._router.add_api_route(status_endpoint, self._status, methods=['POST'])
+            self._router.add_api_route(subscribe_endpoint, self._subscribe, methods=['POST'])
+            self._router.add_api_route(unsubscribe_endpoint, self._unsubscribe, methods=['POST'])
+            self._router.add_api_route(request_endpoint, self._request, methods=['POST'])
         
         self._endpoint.include_router(self._router)
 
@@ -144,6 +146,20 @@ class PublisherEndpoint():
     def terminate(self):
         self._local_node_database.close()
     
+    async def _dispatcher(self, req: Request) -> Response:
+        body = await req.body()
+
+        if '<CheckStatusRequest>' in body:
+            return await self._status(req)
+        elif '<SubscriptionRequest>' in body:
+            return await self._subscribe(req)
+        elif '<TerminateSubscriptionRequest>' in body:
+            return await self._unsubscribe(req)
+        elif '<SituationExchangeRequest' in body:
+            return await self._request(req)
+        else:
+            return Response(status_code=400)
+
     async def _status(self, req: Request) -> Response:
         request = xml2siri_request(await req.body())
 

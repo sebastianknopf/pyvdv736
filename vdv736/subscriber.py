@@ -279,8 +279,8 @@ class SubscriberEndpoint():
 
         if '<ServiceDelivery>' in body:
             return await self._delivery(req)
-        
-        return Response(status_code=400)
+        else:
+            return Response(status_code=400)
 
     async def _delivery(self, req: Request) -> Response:
         try:
