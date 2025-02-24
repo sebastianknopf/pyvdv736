@@ -203,11 +203,14 @@ class Subscriber():
     def _send_request(self, subscription: Subscription, siri_request: SiriRequest) -> SiriResponse|None:
         try:
             if isinstance(siri_request, CheckStatusRequest):
-                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{subscription.status_endpoint}"
+                status_endpoint = subscription.single_endpoint if subscription.single_endpoint is not None else subscription.status_endpoint
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{status_endpoint}"
             elif isinstance(siri_request, SituationExchangeSubscriptionRequest):
-                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{subscription.subscribe_endpoint}"
+                subscribe_endpoint = subscription.single_endpoint if subscription.single_endpoint is not None else subscription.subscribe_endpoint
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{subscribe_endpoint}"
             elif isinstance(siri_request, TerminateSubscriptionRequest):
-                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{subscription.unsubscribe_endpoint}"
+                unsubscribe_endpoint = subscription.single_endpoint if subscription.single_endpoint is not None else subscription.unsubscribe_endpoint
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{unsubscribe_endpoint}"
             
             headers = {
                 "Content-Type": "application/xml"
@@ -228,7 +231,7 @@ class Subscriber():
             subscription_protocol = self._participant_config.participants[publisher_ref]['protocol']
             
             if isinstance(siri_request, SituationExchangeRequest):
-                request_endpoint = self._participant_config.participants[publisher_ref]['request_endpoint']
+                request_endpoint = self._participant_config.participants[publisher_ref]['single_endpoint'] if self._participant_config.participants[publisher_ref]['single_endpoint'] is not None else self._participant_config.participants[publisher_ref]['request_endpoint']
                 endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}/{request_endpoint}"
             
             headers = {
@@ -272,7 +275,12 @@ class SubscriberEndpoint():
         self._local_node_database.close()
     
     async def _dispatcher(self, req: Request) -> Response:
-        return await self._delivery(req)
+        body = await req.body()
+
+        if '<ServiceDelivery>' in body:
+            return await self._delivery(req)
+        
+        return Response(status_code=400)
 
     async def _delivery(self, req: Request) -> Response:
         try:
