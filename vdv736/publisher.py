@@ -10,6 +10,7 @@ from .delivery import ServiceDelivery
 from .delivery import SituationExchangeDelivery
 from .model import PublicTransportSituation
 from .model import Subscription
+from .participantconfig import ParticipantConfig
 from .request import xml2siri_request
 from .response import xml2siri_response
 from .response import SiriResponse
@@ -35,8 +36,7 @@ class Publisher():
         self._local_node_database = local_node_database('vdv736.publisher')
 
         try:
-            with open(participant_config_filename) as participant_config_file:
-                self._participant_config = yaml.safe_load(participant_config_file)
+            self._participant_config = ParticipantConfig(participant_config_filename)
         except Exception as ex:
             self._logger.error(ex)
 
@@ -45,7 +45,7 @@ class Publisher():
         self._endpoint_thread.start()
 
         time.sleep(0.01) # give the endpoint thread time for startup
-        self._logger.info(f"Publisher running at {self._participant_config[self._service_participant_ref]['host']}:{self._participant_config[self._service_participant_ref]['port']}")
+        self._logger.info(f"Publisher running at {self._participant_config.participants[self._service_participant_ref]['host']}:{self._participant_config.participants[self._service_participant_ref]['port']}")
 
         return self
 
@@ -88,19 +88,19 @@ class Publisher():
         logging.getLogger('uvicorn.asgi').propagate = False
 
         # run ASGI server with endpoint
-        endpoint_host = self._participant_config[self._service_participant_ref]['host']
-        endpoint_port = self._participant_config[self._service_participant_ref]['port']
+        endpoint_host = self._participant_config.participants[self._service_participant_ref]['host']
+        endpoint_port = self._participant_config.participants[self._service_participant_ref]['port']
 
         uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host=endpoint_host, port=endpoint_port)
 
     def _send_delivery(self, subscription: Subscription, siri_delivery: ServiceDelivery) -> SiriResponse|None:
         try:
-            subscription_host = self._participant_config[subscription.subscriber]['host']
-            subscription_port = self._participant_config[subscription.subscriber]['port']
-            subscription_protocol = self._participant_config[subscription.subscriber]['protocol']
+            subscription_host = self._participant_config.participants[subscription.subscriber]['host']
+            subscription_port = self._participant_config.participants[subscription.subscriber]['port']
+            subscription_protocol = self._participant_config.participants[subscription.subscriber]['protocol']
             
             if isinstance(siri_delivery, SituationExchangeDelivery):
-                delivery_endpoint = self._participant_config[subscription.subscriber]['delivery_endpoint']
+                delivery_endpoint = self._participant_config.participants[subscription.subscriber]['delivery_endpoint']
                 endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}/{delivery_endpoint}"
 
             headers = {
