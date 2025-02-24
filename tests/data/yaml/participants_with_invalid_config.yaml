@@ -6,6 +6,7 @@ PY_TEST_PUBLISHER:
   host: "127.0.0.1"
   port: 9091
   protocol: http
+  single_endpoint: null
   status_endpoint: /status
   subscribe_endpoint: /subscribe
   unsubscribe_endpoint: /unsubscribe

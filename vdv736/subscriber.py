@@ -256,10 +256,13 @@ class SubscriberEndpoint():
 
         self._local_node_database = local_node_database('vdv736.subscriber')
 
-    def create_endpoint(self, participant_ref: str, delivery_endpoint='/delivery') -> FastAPI:
+    def create_endpoint(self, participant_ref: str, single_endpoint: str|None = None, delivery_endpoint: str = '/delivery') -> FastAPI:
         self.participant_ref = participant_ref
 
-        self._router.add_api_route(delivery_endpoint, self._delivery, methods=['POST'])
+        if single_endpoint is not None:
+            self._router.add_api_route(single_endpoint, self._dispatcher, methods=['POST'])
+        else:
+            self._router.add_api_route(delivery_endpoint, self._delivery, methods=['POST'])
         
         self._endpoint.include_router(self._router)
 
@@ -268,6 +271,9 @@ class SubscriberEndpoint():
     def terminate(self) -> None:
         self._local_node_database.close()
     
+    async def _dispatcher(self, req: Request) -> Response:
+        return await self._delivery(req)
+
     async def _delivery(self, req: Request) -> Response:
         try:
             delivery = xml2siri_delivery(await req.body())
@@ -289,7 +295,7 @@ class SubscriberEndpoint():
         except Exception as ex:
             self._logger.error(ex)
 
-            # create data acknowledgement
+            # create data acknowledgement with Fail status
             acknowledgement = DataReceivedAcknowledgement(
                 sirixml_get_value(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.SubscriberRef'), 
                 sirixml_get_value(delivery, 'Siri.ServiceDelivery.ResponseMessageIdentifier')

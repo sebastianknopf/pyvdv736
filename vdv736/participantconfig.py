@@ -11,6 +11,7 @@ class ParticipantConfig:
                     'host': '127.0.0.1',
                     'port': 9090,
                     'protocol': 'http',
+                    'single_endpoint': None,
                     'status_endpoint': '/status',
                     'subscribe_endpoint': '/subscribe',
                     'unsubscribe_endpoint': '/unsubscribe',
