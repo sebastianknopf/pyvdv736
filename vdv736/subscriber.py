@@ -11,6 +11,7 @@ from .delivery import xml2siri_delivery
 from .delivery import SituationExchangeDelivery
 from .model import PublicTransportSituation
 from .model import Subscription
+from .participantconfig import ParticipantConfig
 from .request import SiriRequest
 from .request import CheckStatusRequest
 from .request import SituationExchangeSubscriptionRequest
@@ -39,8 +40,7 @@ class Subscriber():
         self._local_node_database = local_node_database('vdv736.subscriber')
 
         try:
-            with open(participant_config_filename) as participant_config_file:
-                self._participant_config = yaml.safe_load(participant_config_file)
+            self._participant_config = ParticipantConfig(participant_config_filename)
         except Exception as ex:
             self._logger.error(ex)
 
@@ -49,7 +49,7 @@ class Subscriber():
         self._endpoint_thread.start()
 
         time.sleep(0.01) # give the endpoint thread time for startup
-        self._logger.info(f"Subscriber running at {self._participant_config[self._service_participant_ref]['host']}:{self._participant_config[self._service_participant_ref]['port']}")
+        self._logger.info(f"Subscriber running at {self._participant_config.participants[self._service_participant_ref]['host']}:{self._participant_config.participants[self._service_participant_ref]['port']}")
 
         return self
 
@@ -106,15 +106,15 @@ class Subscriber():
     def subscribe(self, participant_ref: str) -> str|None:
 
         subscription_id = str(uuid.uuid4())
-        subscription_host = self._participant_config[participant_ref]['host']
-        subscription_port = self._participant_config[participant_ref]['port']
-        subscription_protocol = self._participant_config[participant_ref]['protocol']
+        subscription_host = self._participant_config.participants[participant_ref]['host']
+        subscription_port = self._participant_config.participants[participant_ref]['port']
+        subscription_protocol = self._participant_config.participants[participant_ref]['protocol']
         subscription_termination = timestamp(60 * 60 * 24)
 
         subscription = Subscription.create(subscription_id, subscription_host, subscription_port, subscription_protocol, self._service_participant_ref, subscription_termination)
-        subscription.status_endpoint = self._participant_config[participant_ref]['status_endpoint']
-        subscription.subscribe_endpoint = self._participant_config[participant_ref]['subscribe_endpoint']
-        subscription.unsubscribe_endpoint = self._participant_config[participant_ref]['unsubscribe_endpoint']
+        subscription.status_endpoint = self._participant_config.participants[participant_ref]['status_endpoint']
+        subscription.subscribe_endpoint = self._participant_config.participants[participant_ref]['subscribe_endpoint']
+        subscription.unsubscribe_endpoint = self._participant_config.participants[participant_ref]['unsubscribe_endpoint']
 
         subscription.remote_service_participant_ref = participant_ref
 
@@ -195,8 +195,8 @@ class Subscriber():
         logging.getLogger('uvicorn.asgi').propagate = False
 
         # run ASGI server with endpoint
-        endpoint_host = self._participant_config[self._service_participant_ref]['host']
-        endpoint_port = self._participant_config[self._service_participant_ref]['port']
+        endpoint_host = self._participant_config.participants[self._service_participant_ref]['host']
+        endpoint_port = self._participant_config.participants[self._service_participant_ref]['port']
 
         uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host=endpoint_host, port=endpoint_port)
 
@@ -223,12 +223,12 @@ class Subscriber():
         
     def _send_direct_request(self, publisher_ref: str, siri_request: SiriRequest) -> SituationExchangeDelivery|None:
         try:
-            subscription_host = self._participant_config[publisher_ref]['host']
-            subscription_port = self._participant_config[publisher_ref]['port']
-            subscription_protocol = self._participant_config[publisher_ref]['protocol']
+            subscription_host = self._participant_config.participants[publisher_ref]['host']
+            subscription_port = self._participant_config.participants[publisher_ref]['port']
+            subscription_protocol = self._participant_config.participants[publisher_ref]['protocol']
             
             if isinstance(siri_request, SituationExchangeRequest):
-                request_endpoint = self._participant_config[publisher_ref]['request_endpoint']
+                request_endpoint = self._participant_config.participants[publisher_ref]['request_endpoint']
                 endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}/{request_endpoint}"
             
             headers = {
