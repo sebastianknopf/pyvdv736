@@ -1,3 +1,4 @@
+import logging
 import os
 import platform
 import sqlite3
@@ -10,6 +11,10 @@ from .model import Subscription
 class LocalNodeDatabase:
 
     def __init__(self, name):
+        # create logger
+        self._logger = logging.getLogger('uvicorn')
+
+        # connect to database
         tempdir = "/tmp" if platform.system() == "Darwin" else tempfile.gettempdir()
         self._filename = os.path.join(tempdir, name)
 
