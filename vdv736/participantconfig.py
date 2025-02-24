@@ -20,13 +20,19 @@ class ParticipantConfig:
 
                 configs = yaml.safe_load(participant_config_file)
                 for participant_id, participant_config in configs.items():
-                    self.participants[participant_id] = self._merge_config(
+                    merged_config = self._merge_config(
                         default_config, 
                         participant_config
                     )
+
+                    unknown_keys = merged_config.keys() - default_config.keys()
+                    if len(unknown_keys) > 0:
+                         raise ValueError(f"unknown participant config key(s) {unknown_keys}")
+
+                    self.participants[participant_id] = merged_config
 
     def _merge_config(self, defaults, actual):
         if isinstance(defaults, dict) and isinstance(actual, dict):
             return {k: self._merge_config(defaults.get(k, {}), actual.get(k, {})) for k in set(defaults) | set(actual)}
         
-        return actual if actual else defaults
+        return actual if actual or actual == None else defaults
