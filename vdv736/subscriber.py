@@ -112,6 +112,7 @@ class Subscriber():
         subscription_termination = timestamp(60 * 60 * 24)
 
         subscription = Subscription.create(subscription_id, subscription_host, subscription_port, subscription_protocol, self._service_participant_ref, subscription_termination)
+        subscription.single_endpoint = self._participant_config.participants[participant_ref]['single_endpoint']
         subscription.status_endpoint = self._participant_config.participants[participant_ref]['status_endpoint']
         subscription.subscribe_endpoint = self._participant_config.participants[participant_ref]['subscribe_endpoint']
         subscription.unsubscribe_endpoint = self._participant_config.participants[participant_ref]['unsubscribe_endpoint']
@@ -198,7 +199,11 @@ class Subscriber():
         endpoint_host = self._participant_config.participants[self._service_participant_ref]['host']
         endpoint_port = self._participant_config.participants[self._service_participant_ref]['port']
 
-        uvicorn.run(app=self._endpoint.create_endpoint(self._service_participant_ref), host=endpoint_host, port=endpoint_port)
+        uvicorn.run(app=self._endpoint.create_endpoint(
+            self._service_participant_ref,
+            self._participant_config.participants[self._service_participant_ref]['single_endpoint'],
+            self._participant_config.participants[self._service_participant_ref]['delivery_endpoint']
+        ), host=endpoint_host, port=endpoint_port)
 
     def _send_request(self, subscription: Subscription, siri_request: SiriRequest) -> SiriResponse|None:
         try:
@@ -275,9 +280,9 @@ class SubscriberEndpoint():
         self._local_node_database.close()
     
     async def _dispatcher(self, req: Request) -> Response:
-        body = await req.body()
+        body = str(await req.body())
 
-        if '<ServiceDelivery>' in body:
+        if '<ServiceDelivery' in body:
             return await self._delivery(req)
         else:
             return Response(status_code=400)
