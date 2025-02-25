@@ -33,6 +33,7 @@ class Subscription:
         element.remote_service_participant_ref = obj.remote_service_participant_ref
         element.remote_service_startup_time = obj.remote_service_startup_time
 
+        element.single_endpoint = obj.single_endpoint
         element.status_endpoint = obj.status_endpoint
         element.subscribe_endpoint = obj.subscribe_endpoint
         element.unsubscribe_endpoint = obj.unsubscribe_endpoint
@@ -54,6 +55,7 @@ class Subscription:
         obj.remote_service_participant_ref = element.remote_service_participant_ref.text
         obj.remote_service_startup_time = element.remote_service_startup_time.text
 
+        obj.single_endpoint = element.single_endpoint.text
         obj.status_endpoint = element.status_endpoint.text
         obj.subscribe_endpoint = element.subscribe_endpoint.text
         obj.unsubscribe_endpoint = element.unsubscribe_endpoint.text
@@ -71,6 +73,7 @@ class Subscription:
         self.remote_service_participant_ref = None
         self.remote_service_startup_time = None
 
+        self.single_endpoint = None
         self.status_endpoint = '/status'
         self.subscribe_endpoint = '/subscribe'
         self.unsubscribe_endpoint = '/unsubscribe'

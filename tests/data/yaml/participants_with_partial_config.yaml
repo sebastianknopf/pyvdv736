@@ -1,6 +1,7 @@
 PY_TEST_SUBSCRIBER:
   host: "127.0.0.1"
   port: 9090
+  single_endpoint: /server
 
 PY_TEST_PUBLISHER:
   host: "127.0.0.1"

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Siri xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" version="2.0" xmlns="http://www.siri.org.uk/siri">
+	<TerminateSubscriptionRequest>
+		<RequestTimestamp>2024-10-25T01:00:04.443323Z</RequestTimestamp>
+		<RequestorRef>TEST</RequestorRef>
+		<SubscriberRef>TEST</SubscriberRef>
+		<SubscriptionRef>1</SubscriptionRef>
+	</TerminateSubscriptionRequest>
+</Siri>

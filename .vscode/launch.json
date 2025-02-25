@@ -1,0 +1,34 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug: Publisher",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "demo/demo_publisher.py",
+            "console": "integratedTerminal",
+            "env": {"PYTHONPATH": "${workspaceRoot}"},
+        },
+        {
+            "name": "Debug: Subscriber (P/S)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "demo/demo_subscriber.py",
+            "args": ["ps"],
+            "console": "integratedTerminal",
+            "env": {"PYTHONPATH": "${workspaceRoot}"},
+        },
+        {
+            "name": "Debug: Unittest",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "unittest",
+            "args": ["discover"],
+            "console": "integratedTerminal",
+            "env": {"PYTHONPATH": "${workspaceRoot}"}
+        }
+    ]
+}
