@@ -13,7 +13,7 @@
             "env": {"PYTHONPATH": "${workspaceRoot}"},
         },
         {
-            "name": "Debug: Subscriber",
+            "name": "Debug: Subscriber (P/S)",
             "type": "debugpy",
             "request": "launch",
             "program": "demo/demo_subscriber.py",
