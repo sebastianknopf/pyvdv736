@@ -21,6 +21,7 @@ PY_TEST_PUBLISHER:
   host: "127.0.0.1"
   port: 9091
   protocol: http
+  single_endpoint: null
   status_endpoint: /status
   subscribe_endpoint: /subscribe
   unsubscribe_endpoint: /unsubscribe
@@ -29,6 +30,8 @@ PY_TEST_PUBLISHER:
 ```
 
 The top level keys are the participant IDs, which must be agreed between the participants at first. Each participant system needs to have an IP address or hostname, a port and a protocol which should be used for access. You can also specify the endpoints for the different actions a participant is providing.
+
+_Note: There're some implementations which do not use special endpoints for each request type. To deal with them, set the property `single_endpoint` to a value other than `null`. This leads to the other endpoint configurations to become ignored and works for remote publishers as well as for the subscriber and publisher in this implementation._
 
 ## Installation & Usage
 Using this library is quite simple. Install it using
