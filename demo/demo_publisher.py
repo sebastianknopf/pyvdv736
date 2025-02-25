@@ -14,7 +14,8 @@ with Publisher('PY_TEST_PUBLISHER', './demo/demo_participants.yaml') as publishe
     publisher.publish_situation(PublicTransportSituation.create(uuid.uuid4()))
     time.sleep(15)
     publisher.publish_situation(PublicTransportSituation.create(uuid.uuid4()))
-    time.sleep(20)
+    time.sleep(40)
+    publisher.publish_situation(PublicTransportSituation.create(uuid.uuid4()))
 
     while True:
         pass  
