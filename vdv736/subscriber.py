@@ -2,12 +2,13 @@ import logging
 import requests
 import uuid
 import time
+import typing
 import uvicorn
-import yaml
 
 from .isotime import timestamp
 from .database import local_node_database
 from .delivery import xml2siri_delivery
+from .delivery import SiriDelivery
 from .delivery import SituationExchangeDelivery
 from .model import PublicTransportSituation
 from .model import Subscription
@@ -64,7 +65,7 @@ class Subscriber():
         if self._local_node_database is not None:
             self._local_node_database.close(True)
 
-    def set_callbacks(self, on_delivery_callback) -> None:
+    def set_callbacks(self, on_delivery_callback: typing.Callable[[SiriDelivery], None]) -> None:
         self._endpoint.set_callbacks(on_delivery_callback)
 
     def get_situations(self) -> dict[str, PublicTransportSituation]:
@@ -93,7 +94,7 @@ class Subscriber():
                     self._logger.info(f"Status for subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} OK")
                     return True
                 else:
-                    self._logger.warn(f"Remote server for subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} seems to be restarted")
+                    self._logger.warning(f"Remote server for subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} seems to be restarted")
                     
                     self.unsubscribe(subscription.id)
                     return self.subscribe(subscription.remote_service_participant_ref) is not None
@@ -270,7 +271,7 @@ class SubscriberEndpoint():
 
         self._on_delivery = None
 
-    def set_callbacks(self, on_delivery_callback) -> None:
+    def set_callbacks(self, on_delivery_callback: typing.Callable[[SiriDelivery], None]) -> None:
         self._on_delivery = on_delivery_callback
     
     def create_endpoint(self, participant_ref: str, single_endpoint: str|None = None, delivery_endpoint: str = '/delivery') -> FastAPI:
