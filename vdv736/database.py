@@ -123,6 +123,22 @@ class LocalNodeDatabase:
         except sqlite3.Error as ex:
             self._logger.error(ex)
             return False
+        
+    def add_or_update_situation(self, situation_id, situation: PublicTransportSituation) -> bool:
+        try:
+            cursor = self._connection.cursor()
+            cursor.execute("SELECT COUNT(*) AS 'count' FROM situations WHERE id = ?", (situation_id,))
+            count = cursor.fetchone()['count']
+
+            if count == 0:
+                self.add_situation(situation_id, situation)
+            else:
+                self.update_situation(situation_id, situation)
+
+            return True
+        except sqlite3.Error as ex:
+            self._logger.error(ex)
+            return False
 
     def remove_situation(self, situation_id) -> bool:
         try:

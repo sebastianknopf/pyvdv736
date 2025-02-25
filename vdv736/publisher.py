@@ -62,7 +62,7 @@ class Publisher():
     
     def publish_situation(self, situation: PublicTransportSituation) -> None:
         situation_id = sirixml_get_value(situation, 'SituationNumber')
-        self._local_node_database.add_situation(situation_id, situation)
+        self._local_node_database.add_or_update_situation(situation_id, situation)
         
         for _, subscription in self._local_node_database.get_subscriptions().items():
             delivery = SituationExchangeDelivery(self._service_participant_ref, subscription)
