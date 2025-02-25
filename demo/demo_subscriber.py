@@ -3,8 +3,12 @@ import sys
 import time
 
 from vdv736.subscriber import Subscriber
+from vdv736.delivery import SiriDelivery
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
+
+def on_delivery(delivery: SiriDelivery) -> None:
+    print('Delivery callback called...')
 
 with Subscriber('PY_TEST_SUBSCRIBER', './demo/demo_participants.yaml') as subscriber:
 
@@ -16,10 +20,12 @@ with Subscriber('PY_TEST_SUBSCRIBER', './demo/demo_participants.yaml') as subscr
         subscriber.status(sid)
         time.sleep(10)
         subscriber.unsubscribe(sid)
+
+        subscriber.set_callbacks(on_delivery)
         sid = subscriber.subscribe('PY_TEST_PUBLISHER')
 
         while True:
-            time.sleep(60)
+            time.sleep(30)
             subscriber.status()
 
     else:

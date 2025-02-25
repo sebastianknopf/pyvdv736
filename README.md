@@ -42,8 +42,14 @@ Then use a `Subscriber` or `Publisher` object to work with. See following exampl
 
 ```python
 from vdv736.subscriber import Subscriber
+from vdv736.delivery import SiriDelivery
+
+def on_delivery(delivery: SiriDelivery) -> None:
+    print('Delivery callback called...')
 
 with Subscriber('PY_TEST_SUBSCRIBER', './participants.yaml') as subscriber:
+    subscriber.set_callbacks(on_delivery)
+    
     subscription_id = subscriber.subscribe('PY_TEST_PUBLISHER')
     ...
     subscriber.unsubscribe(subscription_id)

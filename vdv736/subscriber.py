@@ -2,12 +2,13 @@ import logging
 import requests
 import uuid
 import time
+import typing
 import uvicorn
-import yaml
 
 from .isotime import timestamp
 from .database import local_node_database
 from .delivery import xml2siri_delivery
+from .delivery import SiriDelivery
 from .delivery import SituationExchangeDelivery
 from .model import PublicTransportSituation
 from .model import Subscription
@@ -50,6 +51,7 @@ class Subscriber():
 
         time.sleep(0.01) # give the endpoint thread time for startup
         self._logger.info(f"Subscriber running at {self._participant_config.participants[self._service_participant_ref]['host']}:{self._participant_config.participants[self._service_participant_ref]['port']}")
+        self._logger.info(f"Local node database at {self._local_node_database._filename}")
 
         return self
 
@@ -62,6 +64,9 @@ class Subscriber():
 
         if self._local_node_database is not None:
             self._local_node_database.close(True)
+
+    def set_callbacks(self, on_delivery_callback: typing.Callable[[SiriDelivery], None]) -> None:
+        self._endpoint.set_callbacks(on_delivery_callback)
 
     def get_situations(self) -> dict[str, PublicTransportSituation]:
         return self._local_node_database.get_situations()
@@ -89,7 +94,7 @@ class Subscriber():
                     self._logger.info(f"Status for subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} OK")
                     return True
                 else:
-                    self._logger.warn(f"Remote server for subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} seems to be restarted")
+                    self._logger.warning(f"Remote server for subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} seems to be restarted")
                     
                     self.unsubscribe(subscription.id)
                     return self.subscribe(subscription.remote_service_participant_ref) is not None
@@ -264,6 +269,11 @@ class SubscriberEndpoint():
 
         self._local_node_database = local_node_database('vdv736.subscriber')
 
+        self._on_delivery = None
+
+    def set_callbacks(self, on_delivery_callback: typing.Callable[[SiriDelivery], None]) -> None:
+        self._on_delivery = on_delivery_callback
+    
     def create_endpoint(self, participant_ref: str, single_endpoint: str|None = None, delivery_endpoint: str = '/delivery') -> FastAPI:
         self.participant_ref = participant_ref
 
@@ -290,6 +300,10 @@ class SubscriberEndpoint():
     async def _delivery(self, req: Request) -> Response:
         try:
             delivery = xml2siri_delivery(await req.body())
+
+            # run callback method if existing ...
+            if self._on_delivery is not None:
+                self._on_delivery(delivery)
 
             # process service delivery ...
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
