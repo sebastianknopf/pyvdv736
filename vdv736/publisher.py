@@ -187,7 +187,7 @@ class PublisherEndpoint():
             None,
             None,
             None,
-            sirixml_get_value(request, 'Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriberRef'),
+            sirixml_get_value(request, 'Siri.SubscriptionRequest.RequestorRef'),
             subscription_termination
         )
             
