@@ -50,6 +50,7 @@ class Subscriber():
 
         time.sleep(0.01) # give the endpoint thread time for startup
         self._logger.info(f"Subscriber running at {self._participant_config.participants[self._service_participant_ref]['host']}:{self._participant_config.participants[self._service_participant_ref]['port']}")
+        self._logger.info(f"Local node database at {self._local_node_database._filename}")
 
         return self
 
