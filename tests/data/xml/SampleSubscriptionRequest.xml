@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Siri xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" version="2.0" xmlns="http://www.siri.org.uk/siri">
+	<SubscriptionRequest>
+		<RequestTimestamp>2024-10-25T01:00:14.51303Z</RequestTimestamp>
+		<RequestorRef>TEST</RequestorRef>
+		<SituationExchangeSubscriptionRequest>
+			<SubscriptionIdentifier>1</SubscriptionIdentifier>
+			<InitialTerminationTime>2024-10-26T01:00:00Z</InitialTerminationTime>
+			<SituationExchangeRequest>
+				<RequestTimestamp>2024-10-25T01:00:14.51303Z</RequestTimestamp>
+			</SituationExchangeRequest>
+			<IncrementalUpdates>true</IncrementalUpdates>
+		</SituationExchangeSubscriptionRequest>
+	</SubscriptionRequest>
+</Siri>
