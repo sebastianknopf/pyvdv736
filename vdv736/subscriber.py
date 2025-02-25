@@ -63,6 +63,9 @@ class Subscriber():
         if self._local_node_database is not None:
             self._local_node_database.close(True)
 
+    def set_callbacks(self, on_delivery_callback) -> None:
+        self._endpoint.set_callbacks(on_delivery_callback)
+
     def get_situations(self) -> dict[str, PublicTransportSituation]:
         return self._local_node_database.get_situations()
 
@@ -264,6 +267,11 @@ class SubscriberEndpoint():
 
         self._local_node_database = local_node_database('vdv736.subscriber')
 
+        self._on_delivery = None
+
+    def set_callbacks(self, on_delivery_callback) -> None:
+        self._on_delivery = on_delivery_callback
+    
     def create_endpoint(self, participant_ref: str, single_endpoint: str|None = None, delivery_endpoint: str = '/delivery') -> FastAPI:
         self.participant_ref = participant_ref
 
@@ -290,6 +298,10 @@ class SubscriberEndpoint():
     async def _delivery(self, req: Request) -> Response:
         try:
             delivery = xml2siri_delivery(await req.body())
+
+            # run callback method if existing ...
+            if self._on_delivery is not None:
+                self._on_delivery(delivery)
 
             # process service delivery ...
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):

@@ -1,11 +1,11 @@
 import os
 import unittest
+import unittest.mock
 
 from fastapi.testclient import TestClient
 
 from vdv736.subscriber import SubscriberEndpoint
 from vdv736.response import xml2siri_response
-from vdv736.sirixml import get_value as sirixml_get_value
 
 class SubscriberEndpoint_Test(unittest.TestCase):
 
@@ -29,6 +29,24 @@ class SubscriberEndpoint_Test(unittest.TestCase):
 
             siri_response = xml2siri_response(response.content)
             self.assertEqual(True, siri_response.Siri.DataReceivedAcknowledgement.Status)
+
+    def test_SampleServiceDeliveryWithCallbacks(self):
+        on_delivery_callback = unittest.mock.Mock()
+            
+        self.endpoint.set_callbacks(on_delivery_callback)
+        
+        xml_filename = os.path.join(os.path.dirname(__file__), 'data/xml/SampleServiceDelivery.xml')
+        with open(xml_filename, 'r') as xml_file:
+            
+            response = self.client.post('/vdv736', content=xml_file.read())
+
+            self.assertEqual(200, response.status_code)
+            on_delivery_callback.assert_called()
+
+            siri_response = xml2siri_response(response.content)
+            self.assertEqual(True, siri_response.Siri.DataReceivedAcknowledgement.Status)
+
+        self.endpoint.set_callbacks(None)
 
     def test_InvalidXmlData(self):
         xml_filename = os.path.join(os.path.dirname(__file__), 'data/xml/InvalidXmlData.xml')
