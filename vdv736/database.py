@@ -21,6 +21,8 @@ class LocalNodeDatabase:
         self._connection = sqlite3.connect(self._filename, check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
 
+        self._logger.info(f"Local node database at {self._filename}")
+
         # init required tables if not already done
         cursor = self._connection.cursor()
         cursor.execute("CREATE TABLE IF NOT EXISTS subscriptions (id TEXT NOT NULL PRIMARY KEY, serialized TEXT NOT NULL)")
