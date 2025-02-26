@@ -1,6 +1,7 @@
 import logging
 import requests
 import time
+import typing
 import uvicorn
 
 from .isotime import timestamp
@@ -20,6 +21,7 @@ from .sirixml import get_elements as sirixml_get_elements
 from .sirixml import get_value as sirixml_get_value
 
 from fastapi import FastAPI
+from fastapi import BackgroundTasks
 from fastapi import APIRouter
 from fastapi import Request
 from fastapi import Response
@@ -41,6 +43,9 @@ class Publisher():
         except Exception as ex:
             self._logger.error(ex)
 
+        self._on_subscribe = None
+        self._on_unsubscribe = None
+
     def __enter__(self):
         
         self._endpoint_thread = Thread(target=self._run_endpoint, args=(), daemon=True)
@@ -49,6 +54,12 @@ class Publisher():
         time.sleep(0.01) # give the endpoint thread time for startup
         self._logger.info(f"Publisher running at {self._participant_config.participants[self._service_participant_ref]['host']}:{self._participant_config.participants[self._service_participant_ref]['port']}")
         self._logger.info(f"Local node database at {self._local_node_database._filename}")
+
+        # set internal callbacks
+        self._endpoint.set_callbacks(
+            on_subscribe_callback=self._on_subscribe_internal,
+            on_unsubscribe_callback=self._on_unsubscribe_internal
+        )
 
         return self
 
@@ -62,6 +73,17 @@ class Publisher():
         if self._local_node_database is not None:
             self._local_node_database.close(True)
     
+    def set_callbacks(self, on_status_callback: typing.Callable[[], None]|None = None, on_subscribe_callback: typing.Callable[[Subscription], None]|None = None, on_unsubscribe_callback: typing.Callable[[Subscription], None]|None = None, on_request_callback: typing.Callable[[], None]|None = None) -> None:
+        self._on_subscribe = on_subscribe_callback
+        self._on_unsubscribe = on_unsubscribe_callback
+
+        self._endpoint.set_callbacks(
+            on_status_callback=on_status_callback,
+            on_subscribe_callback=self._on_subscribe_internal,
+            on_unsubscribe_callback=self._on_unsubscribe_internal, 
+            on_request_callback=on_request_callback
+        )
+
     def publish_situation(self, situation: PublicTransportSituation) -> None:
         situation_id = sirixml_get_value(situation, 'SituationNumber')
         self._local_node_database.add_or_update_situation(situation_id, situation)
@@ -77,6 +99,30 @@ class Publisher():
             else:
                 self._logger.error(f"Failed to send delivery for subscription {subscription.id} to {subscription.subscriber}")
 
+    def _on_subscribe_internal(self, subscription: Subscription) -> None:
+        
+        # send initial load here
+        delivery = SituationExchangeDelivery(self._service_participant_ref, subscription)
+        for _, situation in self._local_node_database.get_situations().items():
+            delivery.add_situation(situation)
+
+        response = self._send_delivery(subscription, delivery)
+
+        if sirixml_get_value(response, 'Siri.DataReceivedAcknowledgement.Status', False):
+            self._logger.info(f"Sent initial load delivery for subscription {subscription.id} to {subscription.subscriber} successfully")
+        else:
+            self._logger.error(f"Failed to send initial load delivery for subscription {subscription.id} to {subscription.subscriber}")
+
+        # call external callback method
+        if self._on_subscribe is not None:
+            self._on_subscribe(subscription)
+
+    def _on_unsubscribe_internal(self, subscription: Subscription) -> None:
+
+        # call external callback method
+        if self._on_unsubscribe is not None:
+            self._on_unsubscribe(subscription)
+    
     def _run_endpoint(self) -> None:
         self._endpoint = PublisherEndpoint(self._service_participant_ref)
 
@@ -137,6 +183,17 @@ class PublisherEndpoint():
         self._endpoint = FastAPI()
 
         self._local_node_database = local_node_database('vdv736.publisher')
+        
+        self._on_status = None
+        self._on_subscribe = None
+        self._on_unsubscribe = None
+        self._on_request = None
+
+    def set_callbacks(self, on_status_callback: typing.Callable[[], None]|None = None, on_subscribe_callback: typing.Callable[[Subscription], None]|None = None, on_unsubscribe_callback: typing.Callable[[Subscription], None]|None = None, on_request_callback: typing.Callable[[], None]|None = None) -> None:
+        self._on_status = on_status_callback
+        self._on_subscribe = on_subscribe_callback
+        self._on_unsubscribe = on_unsubscribe_callback
+        self._on_request = on_request_callback
 
     def create_endpoint(self, participant_ref: str, single_endpoint: str|None = None, status_endpoint: str = '/status', subscribe_endpoint: str = '/subscribe', unsubscribe_endpoint: str = '/unsubscribe', request_endpoint: str = '/request') -> FastAPI:
         self._participant_ref = participant_ref
@@ -156,28 +213,32 @@ class PublisherEndpoint():
     def terminate(self):
         self._local_node_database.close()
     
-    async def _dispatcher(self, req: Request) -> Response:
+    async def _dispatcher(self, req: Request, bgt: BackgroundTasks) -> Response:
         body = str(await req.body())
 
         if '<CheckStatusRequest' in body:
-            return await self._status(req)
+            return await self._status(req, bgt)
         elif '<SubscriptionRequest' in body:
-            return await self._subscribe(req)
+            return await self._subscribe(req, bgt)
         elif '<TerminateSubscriptionRequest' in body:
-            return await self._unsubscribe(req)
+            return await self._unsubscribe(req, bgt)
         elif '<SituationExchangeRequest' in body:
-            return await self._request(req)
+            return await self._request(req, bgt)
         else:
             return Response(status_code=400)
 
-    async def _status(self, req: Request) -> Response:
+    async def _status(self, req: Request, bgt: BackgroundTasks) -> Response:
         request = xml2siri_request(await req.body())
+
+        # run callback method for status
+        if self._on_status is not None:
+            bgt.add_task(self._on_status)
 
         # simply respond with current status
         response = CheckStatusResponse(self._service_startup_time)
         return Response(content=response.xml(), media_type='application/xml')
 
-    async def _subscribe(self, req: Request) -> Response:
+    async def _subscribe(self, req: Request, bgt: BackgroundTasks) -> Response:
         request = xml2siri_request(await req.body())
 
         # add subscription parameters to subscription index
@@ -201,6 +262,10 @@ class PublisherEndpoint():
 
             if result == True:
                 response.ok(subscription_id, subscription_termination)
+
+                # run callback method for subscriptions
+                if self._on_subscribe is not None:
+                    bgt.add_task(self._on_subscribe, subscription)
             else:
                 response.error(subscription_id)
 
@@ -215,7 +280,7 @@ class PublisherEndpoint():
 
             return Response(content=response.xml(), media_type='application/xml')
 
-    async def _unsubscribe(self, req: Request) -> Response:
+    async def _unsubscribe(self, req: Request, bgt: BackgroundTasks) -> Response:
         request = xml2siri_request(await req.body())
 
         subscriber_ref = sirixml_get_value(request, 'Siri.TerminateSubscriptionRequest.RequestorRef')
@@ -236,26 +301,28 @@ class PublisherEndpoint():
                 # respond with SubscriptionResponse OK or ERROR depending on result
                 if result == True:
                     response.add_ok(subscriber_ref, subscription_id)
+
+                    # run callback method for subscriptions
+                    if self._on_unsubscribe is not None:
+                        bgt.add_task(self._on_unsubscribe, subscription)
                 else:
                     response.add_error(subscription_id)
                 
             except Exception:
                 # respond with SubscriptionResponse Error for this subscription
-                response.add_error(subscriber_ref, subscription_id)
+                response.add_error(subscription_id)
 
         return Response(content=response.xml(), media_type='application/xml')
 
-    async def _request(self, req: Request) -> Response:
+    async def _request(self, req: Request, bgt: BackgroundTasks) -> Response:
         request = xml2siri_request(await req.body())
 
-        delivery = SituationExchangeDelivery(self._service_participant_ref, None)
+        # run callback method for requests
+        if self._on_request is not None:
+            bgt.add_task(self._on_request)
 
+        delivery = SituationExchangeDelivery(self._service_participant_ref, None)
         for _, situation in self._local_node_database.get_situations().items():
             delivery.add_situation(situation)
 
-        return Response(content=delivery.xml(), media_type='application/xml')    
-
-        
-
-
-
+        return Response(content=delivery.xml(), media_type='application/xml')
