@@ -34,8 +34,10 @@ from threading import Thread
 
 class Subscriber():
 
-    def __init__(self, participant_ref: str, participant_config_filename: str):
+    def __init__(self, participant_ref: str, participant_config_filename: str, local_ip_address: str = '0.0.0.0'):
         self._service_participant_ref = participant_ref
+        self._service_local_ip_address = local_ip_address
+
         self._logger = logging.getLogger('uvicorn')
 
         self._local_node_database = local_node_database('vdv736.subscriber')
@@ -201,7 +203,7 @@ class Subscriber():
         logging.getLogger('uvicorn.asgi').propagate = False
 
         # run ASGI server with endpoint
-        endpoint_host = self._participant_config.participants[self._service_participant_ref]['host']
+        endpoint_host = self._service_local_ip_address # self._participant_config.participants[self._service_participant_ref]['host']
         endpoint_port = self._participant_config.participants[self._service_participant_ref]['port']
 
         uvicorn.run(app=self._endpoint.create_endpoint(
