@@ -25,7 +25,7 @@ class SubscriberEndpoint_Test(unittest.TestCase):
         on_subscribe_callback = unittest.mock.Mock()
         on_unsubscribe_callback = unittest.mock.Mock()
 
-        self.endpoint.set_callbacks(on_subscribe=on_subscribe_callback, on_unsubscribe=on_unsubscribe_callback)
+        self.endpoint.set_callbacks(on_subscribe_callback=on_subscribe_callback, on_unsubscribe_callback=on_unsubscribe_callback)
         
         xml_filename = os.path.join(os.path.dirname(__file__), 'data/xml/SampleSubscriptionRequest.xml')
         with open(xml_filename, 'r') as xml_file:
@@ -42,7 +42,7 @@ class SubscriberEndpoint_Test(unittest.TestCase):
         on_subscribe_callback = unittest.mock.Mock()
         on_unsubscribe_callback = unittest.mock.Mock()
 
-        self.endpoint.set_callbacks(on_subscribe=on_subscribe_callback, on_unsubscribe=on_unsubscribe_callback)
+        self.endpoint.set_callbacks(on_subscribe_callback=on_subscribe_callback, on_unsubscribe_callback=on_unsubscribe_callback)
         
         xml_filename = os.path.join(os.path.dirname(__file__), 'data/xml/SampleTerminateSpecificSubscriptionRequest.xml')
         with open(xml_filename, 'r') as xml_file:
@@ -61,7 +61,7 @@ class SubscriberEndpoint_Test(unittest.TestCase):
         on_subscribe_callback = unittest.mock.Mock()
         on_unsubscribe_callback = unittest.mock.Mock()
 
-        self.endpoint.set_callbacks(on_subscribe=on_subscribe_callback, on_unsubscribe=on_unsubscribe_callback)
+        self.endpoint.set_callbacks(on_subscribe_callback=on_subscribe_callback, on_unsubscribe_callback=on_unsubscribe_callback)
         
         xml_filename = os.path.join(os.path.dirname(__file__), 'data/xml/SampleTerminateSubscriptionRequest.xml')
         with open(xml_filename, 'r') as xml_file:
