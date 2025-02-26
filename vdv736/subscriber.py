@@ -58,6 +58,12 @@ class Subscriber():
         return self
 
     def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
+        
+        # terminate all subscriptions
+        for subscription_id, subscription in self._local_node_database.get_subscriptions().items():
+            self.unsubscribe(subscription_id)
+
+        # terminate endpoint and close local database
         if self._endpoint is not None:
             self._endpoint.terminate()
         
