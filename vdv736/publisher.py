@@ -70,7 +70,7 @@ class Publisher():
             delivery = SituationExchangeDelivery(self._service_participant_ref, subscription)
             delivery.add_situation(situation)
 
-            response = self._send_delivery(subscription, delivery)
+            response = self._send_request(subscription, delivery)
 
             if sirixml_get_value(response, 'Siri.DataReceivedAcknowledgement.Status', False):
                 self._logger.info(f"Sent delivery for subscription {subscription.id} to {subscription.subscriber} successfully")
@@ -103,7 +103,7 @@ class Publisher():
             self._participant_config.participants[self._service_participant_ref]['request_endpoint']
         ), host=endpoint_host, port=endpoint_port)
 
-    def _send_delivery(self, subscription: Subscription, siri_delivery: ServiceDelivery) -> SiriResponse|None:
+    def _send_request(self, subscription: Subscription, siri_delivery: ServiceDelivery) -> SiriResponse|None:
         try:
             subscription_host = self._participant_config.participants[subscription.subscriber]['host']
             subscription_port = self._participant_config.participants[subscription.subscriber]['port']
@@ -121,9 +121,8 @@ class Publisher():
             response = xml2siri_response(response_xml.content)
 
             return response
-        except Exception as exception:
-            self._logger.exception(exception)
-
+        except Exception as ex:
+            self._logger.exception(ex)
             return None
 
 
