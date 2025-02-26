@@ -26,6 +26,7 @@ from .sirixml import get_elements as sirixml_get_elements
 from .sirixml import get_value as sirixml_get_value
 
 from fastapi import FastAPI
+from fastapi import BackgroundTasks
 from fastapi import APIRouter
 from fastapi import Request
 from fastapi import Response
@@ -273,7 +274,7 @@ class SubscriberEndpoint():
 
         self._on_delivery = None
 
-    def set_callbacks(self, on_delivery_callback: typing.Callable[[SiriDelivery], None]) -> None:
+    def set_callbacks(self, on_delivery_callback: typing.Callable[[SiriDelivery], None]|None) -> None:
         self._on_delivery = on_delivery_callback
     
     def create_endpoint(self, participant_ref: str, single_endpoint: str|None = None, delivery_endpoint: str = '/delivery') -> FastAPI:
@@ -291,21 +292,17 @@ class SubscriberEndpoint():
     def terminate(self) -> None:
         self._local_node_database.close()
     
-    async def _dispatcher(self, req: Request) -> Response:
+    async def _dispatcher(self, req: Request, bgt: BackgroundTasks) -> Response:
         body = str(await req.body())
 
         if '<ServiceDelivery' in body:
-            return await self._delivery(req)
+            return await self._delivery(req, bgt)
         else:
             return Response(status_code=400)
 
-    async def _delivery(self, req: Request) -> Response:
+    async def _delivery(self, req: Request, bgt: BackgroundTasks) -> Response:
         try:
             delivery = xml2siri_delivery(await req.body())
-
-            # run callback method if existing ...
-            if self._on_delivery is not None:
-                self._on_delivery(delivery)
 
             # process service delivery ...
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
@@ -319,6 +316,10 @@ class SubscriberEndpoint():
             )
 
             acknowledgement.ok()
+
+            # run callback method for delivery
+            if self._on_delivery is not None:
+                bgt.add_task(self._on_delivery, delivery)
 
             return Response(content=acknowledgement.xml(), media_type='application/xml')
         except Exception as ex:

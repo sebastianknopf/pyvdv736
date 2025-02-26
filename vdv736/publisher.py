@@ -21,6 +21,7 @@ from .sirixml import get_elements as sirixml_get_elements
 from .sirixml import get_value as sirixml_get_value
 
 from fastapi import FastAPI
+from fastapi import BackgroundTasks
 from fastapi import APIRouter
 from fastapi import Request
 from fastapi import Response
@@ -213,32 +214,32 @@ class PublisherEndpoint():
     def terminate(self):
         self._local_node_database.close()
     
-    async def _dispatcher(self, req: Request) -> Response:
+    async def _dispatcher(self, req: Request, bgt: BackgroundTasks) -> Response:
         body = str(await req.body())
 
         if '<CheckStatusRequest' in body:
-            return await self._status(req)
+            return await self._status(req, bgt)
         elif '<SubscriptionRequest' in body:
-            return await self._subscribe(req)
+            return await self._subscribe(req, bgt)
         elif '<TerminateSubscriptionRequest' in body:
-            return await self._unsubscribe(req)
+            return await self._unsubscribe(req, bgt)
         elif '<SituationExchangeRequest' in body:
-            return await self._request(req)
+            return await self._request(req, bgt)
         else:
             return Response(status_code=400)
 
-    async def _status(self, req: Request) -> Response:
+    async def _status(self, req: Request, bgt: BackgroundTasks) -> Response:
         request = xml2siri_request(await req.body())
 
         # run callback method for status
         if self._on_status is not None:
-            self._on_status()
+            bgt.add_task(self._on_status)
 
         # simply respond with current status
         response = CheckStatusResponse(self._service_startup_time)
         return Response(content=response.xml(), media_type='application/xml')
 
-    async def _subscribe(self, req: Request) -> Response:
+    async def _subscribe(self, req: Request, bgt: BackgroundTasks) -> Response:
         request = xml2siri_request(await req.body())
 
         # add subscription parameters to subscription index
@@ -265,7 +266,7 @@ class PublisherEndpoint():
 
                 # run callback method for subscriptions
                 if self._on_subscribe is not None:
-                    self._on_subscribe(subscription)
+                    bgt.add_task(self._on_subscribe, subscription)
             else:
                 response.error(subscription_id)
 
@@ -280,7 +281,7 @@ class PublisherEndpoint():
 
             return Response(content=response.xml(), media_type='application/xml')
 
-    async def _unsubscribe(self, req: Request) -> Response:
+    async def _unsubscribe(self, req: Request, bgt: BackgroundTasks) -> Response:
         request = xml2siri_request(await req.body())
 
         subscriber_ref = sirixml_get_value(request, 'Siri.TerminateSubscriptionRequest.RequestorRef')
@@ -304,7 +305,7 @@ class PublisherEndpoint():
 
                     # run callback method for subscriptions
                     if self._on_unsubscribe is not None:
-                        self._on_unsubscribe(subscription)
+                        bgt.add_task(self._on_unsubscribe, subscription)
                 else:
                     response.add_error(subscription_id)
                 
@@ -314,12 +315,12 @@ class PublisherEndpoint():
 
         return Response(content=response.xml(), media_type='application/xml')
 
-    async def _request(self, req: Request) -> Response:
+    async def _request(self, req: Request, bgt: BackgroundTasks) -> Response:
         request = xml2siri_request(await req.body())
 
         # run callback method for requests
-        if self._on_status is not None:
-            self._on_status()
+        if self._on_request is not None:
+            bgt.add_task(self._on_request)
 
         delivery = SituationExchangeDelivery(self._service_participant_ref, None)
         for _, situation in self._local_node_database.get_situations().items():
