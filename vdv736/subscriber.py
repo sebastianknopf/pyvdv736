@@ -160,6 +160,8 @@ class Subscriber():
         
         # create termination request here ...
         request = TerminateSubscriptionRequest(self._service_participant_ref)
+        request.subscription(self._service_participant_ref, subscription_id)
+
         response = self._send_request(subscription, request)
 
         # check each termination subscription response for success
