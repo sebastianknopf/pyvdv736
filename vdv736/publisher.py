@@ -1,6 +1,7 @@
 import logging
 import requests
 import time
+import typing
 import uvicorn
 
 from .isotime import timestamp
@@ -138,6 +139,17 @@ class PublisherEndpoint():
         self._endpoint = FastAPI()
 
         self._local_node_database = local_node_database('vdv736.publisher')
+        
+        self._on_status = None
+        self._on_subscribe = None
+        self._on_unsubscribe = None
+        self._on_request = None
+
+    def set_callbacks(self, on_status: typing.Callable[[], None]|None = None, on_subscribe: typing.Callable[[Subscription], None]|None = None, on_unsubscribe: typing.Callable[[Subscription], None]|None = None, on_request: typing.Callable[[], None]|None = None) -> None:
+        self._on_status = on_status
+        self._on_subscribe = on_subscribe
+        self._on_unsubscribe = on_unsubscribe
+        self._on_request = on_request
 
     def create_endpoint(self, participant_ref: str, single_endpoint: str|None = None, status_endpoint: str = '/status', subscribe_endpoint: str = '/subscribe', unsubscribe_endpoint: str = '/unsubscribe', request_endpoint: str = '/request') -> FastAPI:
         self._participant_ref = participant_ref
@@ -174,6 +186,10 @@ class PublisherEndpoint():
     async def _status(self, req: Request) -> Response:
         request = xml2siri_request(await req.body())
 
+        # run callback method for status
+        if self._on_status is not None:
+            self._on_status()
+
         # simply respond with current status
         response = CheckStatusResponse(self._service_startup_time)
         return Response(content=response.xml(), media_type='application/xml')
@@ -202,6 +218,10 @@ class PublisherEndpoint():
 
             if result == True:
                 response.ok(subscription_id, subscription_termination)
+
+                # run callback method for subscriptions
+                if self._on_subscribe is not None:
+                    self._on_subscribe(subscription)
             else:
                 response.error(subscription_id)
 
@@ -237,6 +257,10 @@ class PublisherEndpoint():
                 # respond with SubscriptionResponse OK or ERROR depending on result
                 if result == True:
                     response.add_ok(subscriber_ref, subscription_id)
+
+                    # run callback method for subscriptions
+                    if self._on_unsubscribe is not None:
+                        self._on_unsubscribe(subscription)
                 else:
                     response.add_error(subscription_id)
                 
@@ -249,8 +273,11 @@ class PublisherEndpoint():
     async def _request(self, req: Request) -> Response:
         request = xml2siri_request(await req.body())
 
-        delivery = SituationExchangeDelivery(self._service_participant_ref, None)
+        # run callback method for requests
+        if self._on_status is not None:
+            self._on_status()
 
+        delivery = SituationExchangeDelivery(self._service_participant_ref, None)
         for _, situation in self._local_node_database.get_situations().items():
             delivery.add_situation(situation)
 
