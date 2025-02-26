@@ -61,6 +61,11 @@ class TerminateSubscriptionRequest(SiriRequest):
         self.Siri.TerminateSubscriptionRequest.RequestTimestamp = timestamp()
         self.Siri.TerminateSubscriptionRequest.RequestorRef = subscriber_ref
 
+    def subscription(self, subscriber_ref: str, subscription_id: str) -> None:
+        self.Siri.TerminateSubscriptionRequest.SubscriberRef = subscriber_ref
+        self.Siri.TerminateSubscriptionRequest.SubscriptionRef = subscription_id
+
+    def all(self):
         self.Siri.TerminateSubscriptionRequest.All = Element('All')
 
 

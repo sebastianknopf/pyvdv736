@@ -58,6 +58,12 @@ class Subscriber():
         return self
 
     def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
+        
+        # terminate all subscriptions
+        for subscription_id, subscription in self._local_node_database.get_subscriptions().items():
+            self.unsubscribe(subscription_id)
+
+        # terminate endpoint and close local database
         if self._endpoint is not None:
             self._endpoint.terminate()
         
@@ -154,6 +160,8 @@ class Subscriber():
         
         # create termination request here ...
         request = TerminateSubscriptionRequest(self._service_participant_ref)
+        request.subscription(self._service_participant_ref, subscription_id)
+
         response = self._send_request(subscription, request)
 
         # check each termination subscription response for success
