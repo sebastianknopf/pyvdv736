@@ -106,7 +106,7 @@ class Publisher():
         for _, situation in self._local_node_database.get_situations().items():
             delivery.add_situation(situation)
 
-        response = self._send_delivery(subscription, delivery)
+        response = self._send_request(subscription, delivery)
 
         if sirixml_get_value(response, 'Siri.DataReceivedAcknowledgement.Status', False):
             self._logger.info(f"Sent initial load delivery for subscription {subscription.id} to {subscription.subscriber} successfully")
