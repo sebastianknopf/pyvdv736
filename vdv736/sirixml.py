@@ -1,3 +1,5 @@
+import re
+
 def exists(obj, path):
     path = path.split('.')
     
@@ -34,11 +36,13 @@ def get_value(obj, path, default=None):
     return default
 
 def get_attribute(obj, path, default=None):
-    objectpath = path.split('.')
+    regex = re.compile('\.(?![^{]*})')
+    
+    objectpath = regex.split(path)
     objectpath = '.'.join(objectpath[:-1])
     
     if exists(obj, objectpath):
-        path = path.split('.')
+        path = regex.split(path)
         
         destination = obj
         for element in path[:-1]:
