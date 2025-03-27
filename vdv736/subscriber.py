@@ -219,7 +219,6 @@ class Subscriber():
         endpoint_port = self._participant_config.participants[self._service_participant_ref]['port']
 
         uvicorn.run(app=self._endpoint.create_endpoint(
-            self._service_participant_ref,
             self._participant_config.participants[self._service_participant_ref]['single_endpoint'],
             self._participant_config.participants[self._service_participant_ref]['delivery_endpoint']
         ), host=endpoint_host, port=endpoint_port)
@@ -288,9 +287,7 @@ class SubscriberEndpoint():
     def set_callbacks(self, on_delivery_callback: typing.Callable[[SiriDelivery], None]|None) -> None:
         self._on_delivery = on_delivery_callback
     
-    def create_endpoint(self, participant_ref: str, single_endpoint: str|None = None, delivery_endpoint: str = '/delivery') -> FastAPI:
-        self.participant_ref = participant_ref
-
+    def create_endpoint(self, single_endpoint: str|None = None, delivery_endpoint: str = '/delivery') -> FastAPI:
         if single_endpoint is not None:
             self._router.add_api_route(single_endpoint, self._dispatcher, methods=['POST'])
         else:
