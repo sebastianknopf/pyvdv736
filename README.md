@@ -11,7 +11,12 @@ A subscription then works as follows:
 
 This way, data are only transferred, when they're updated in realtime without polling. Other well-known public transport protocols (like VDV453, VDV454, SIRI) work exactly the same. A digital data hub (aka 'Datendrehscheibe') combines the role of the publisher and subscriber.
 
-_Note: SIRI-SX offers also the option for fetching public transport situations using a simple GET request. VDV736 states that only publish/subscribe is supported. Hence, the request endpoint of the publisher is only experimental and not supported officially._
+An alertnative to this publish/subscribe mechanism is the request/response pattern: Using this pattern, a client simply requests data updates periodically but *is not notified when new data are available*. Hence, request/response is not realtime capable, but much easier to implement in a production environment, as no participant IDs and system configurations besides a request URL must be exchanged.
+
+### Differences to SIRI-SX
+- SIRI-SX offers also the option for fetching public transport situations using a simple GET request. VDV736 states that only publish/subscribe is supported. Hence, the request endpoint of the publisher is only experimental and not supported officially.
+- SIRI services offer a so-called fetched delivery. In this mode, a producer notifies the consumer with a `DataReadyNotification` that there're new data available and the subscriber states that he's ready to receive the data with a `FetchDataRequest`. This mode is currently not supported in this repository.
+- SIRI services have normally implemented a heartbeat request. This request is compareable to the status request, the difference here is that the heartbeat request is triggered by each instance actively, where the status request is performed by the opposide participant and the called instance is only answering passively.
 
 ## Configuration
 There's a YAML file which contains basic configuration for all participants (subscriber as well as publisher). See following example for reference:
@@ -53,6 +58,25 @@ with Subscriber('PY_TEST_SUBSCRIBER', './participants.yaml') as subscriber:
     subscription_id = subscriber.subscribe('PY_TEST_PUBLISHER')
     ...
     subscriber.unsubscribe(subscription_id)
+
+    while True:
+        pass
+```
+
+You can also use the subscriber in the request/response pattern this way:
+
+```python
+from vdv736.subscriber import Subscriber
+from vdv736.delivery import SiriDelivery
+
+def on_delivery(delivery: SiriDelivery) -> None:
+    print('Delivery callback called...')
+
+with Subscriber('PY_TEST_SUBSCRIBER', './participants.yaml') as subscriber:
+    subscriber.request('PY_TEST_PUBLISHER')
+
+    for situation_id, situation in subscriber.get_situations().items():
+        pass # or to whatever you want to do ...
 
     while True:
         pass
