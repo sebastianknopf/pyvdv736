@@ -23,7 +23,6 @@ class SubscriberEndpoint_Test(unittest.TestCase):
 
         # create test client
         cls.client = TestClient(cls.endpoint.create_endpoint(
-            'TEST', 
             '/vdv736'
         ))
 
