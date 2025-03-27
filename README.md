@@ -73,8 +73,12 @@ def on_delivery(delivery: SiriDelivery) -> None:
     print('Delivery callback called...')
 
 with Subscriber('PY_TEST_SUBSCRIBER', './participants.yaml') as subscriber:
+    
+    # run a direct request on the subscriber
+    # the on_delivery callback is called immediately afterwards
     subscriber.request('PY_TEST_PUBLISHER')
 
+    # alternatively you can process every single situation using the method get_situations() and a for loop
     for situation_id, situation in subscriber.get_situations().items():
         pass # or to whatever you want to do ...
 
