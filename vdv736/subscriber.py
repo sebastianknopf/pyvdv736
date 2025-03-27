@@ -43,6 +43,8 @@ class Subscriber():
 
         self._local_node_database = local_node_database('vdv736.subscriber')
 
+        self._on_delivery = None
+
         try:
             self._participant_config = ParticipantConfig(participant_config_filename)
         except Exception as ex:
@@ -75,7 +77,9 @@ class Subscriber():
             self._local_node_database.close(True)
 
     def set_callbacks(self, on_delivery_callback: typing.Callable[[SiriDelivery], None]) -> None:
-        self._endpoint.set_callbacks(on_delivery_callback)
+        self._on_delivery = on_delivery_callback
+
+        self._endpoint.set_callbacks(self._on_delivery)
 
     def get_situations(self) -> dict[str, PublicTransportSituation]:
         return self._local_node_database.get_situations()
@@ -188,6 +192,10 @@ class Subscriber():
         request = SituationExchangeRequest(self._service_participant_ref)
         delivery = self._send_direct_request(publisher_ref, request)
 
+        # check whether on_delivery callback is used ...
+        if self._on_delivery is not None:
+            self._on_delivery(delivery)
+
         if delivery is not None:
             # process service delivery ...
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
@@ -199,7 +207,6 @@ class Subscriber():
             self._logger.error(f"Failed to request data from {publisher_ref}")
 
             return False
-
 
     def _run_endpoint(self) -> None:
         self._endpoint = SubscriberEndpoint(self._service_participant_ref)
