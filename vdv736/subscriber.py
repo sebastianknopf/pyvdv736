@@ -200,7 +200,7 @@ class Subscriber():
             # process service delivery ...
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
                 situation_id = sirixml_get_value(pts, 'SituationNumber')
-                self._local_node_database.add_situation(situation_id, pts)
+                self._local_node_database.add_or_update_situation(situation_id, pts)
 
             return True
         else:
