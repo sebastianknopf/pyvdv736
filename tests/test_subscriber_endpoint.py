@@ -4,6 +4,7 @@ import unittest.mock
 
 from fastapi.testclient import TestClient
 
+from vdv736.model import Subscription
 from vdv736.subscriber import SubscriberEndpoint
 from vdv736.response import xml2siri_response
 
@@ -13,6 +14,14 @@ class SubscriberEndpoint_Test(unittest.TestCase):
     def setUpClass(cls):
         cls.endpoint = SubscriberEndpoint('TEST')
 
+        # setup a virtual subscription, otherwise the subscriber will fail
+        # see #21 for details
+        virtual_subscription = Subscription()
+        virtual_subscription.remote_service_participant_ref = 'TEST-PUBLISHER'
+
+        cls.endpoint._local_node_database.add_subscription('1', virtual_subscription)
+
+        # create test client
         cls.client = TestClient(cls.endpoint.create_endpoint(
             'TEST', 
             '/vdv736'
@@ -48,6 +57,13 @@ class SubscriberEndpoint_Test(unittest.TestCase):
 
         self.endpoint.set_callbacks(None)
 
+    def test_SampleServiceDeliveryWithInvalidPublisher(self):
+        xml_filename = os.path.join(os.path.dirname(__file__), 'data/xml/SampleServiceDeliveryWithInvalidPublisher.xml')
+        with open(xml_filename, 'r') as xml_file:
+            response = self.client.post('/vdv736', content=xml_file.read())
+
+            self.assertEqual(401, response.status_code)
+    
     def test_InvalidXmlData(self):
         xml_filename = os.path.join(os.path.dirname(__file__), 'data/xml/InvalidXmlData.xml')
         with open(xml_filename, 'r') as xml_file:
