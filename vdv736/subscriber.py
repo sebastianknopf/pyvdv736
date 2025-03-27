@@ -97,7 +97,7 @@ class Subscriber():
         request = CheckStatusRequest(subscription)
         response = self._send_request(subscription, request)
 
-        if sirixml_get_value(response, 'Siri.CheckStatusResponse.Status', False):
+        if response is not None and sirixml_get_value(response, 'Siri.CheckStatusResponse.Status', False):
             if subscription.remote_service_startup_time is not None:
                 if sirixml_get_value(response, 'Siri.CheckStatusResponse.ServiceStartedTime') == subscription.remote_service_startup_time:
                     self._logger.info(f"Status for subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} OK")
@@ -136,7 +136,7 @@ class Subscriber():
         request = SituationExchangeSubscriptionRequest(subscription)
         response = self._send_request(subscription, request)
 
-        if sirixml_get_value(response, 'Siri.SubscriptionResponse.ResponseStatus.Status', True):
+        if response is not None and sirixml_get_value(response, 'Siri.SubscriptionResponse.ResponseStatus.Status', True):
             self._logger.info(f"Initialized subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} successfully")
 
             service_started_time = sirixml_get_value(response, 'Siri.SubscriptionResponse.ResponseStatus.ServiceStartedTime')
@@ -166,18 +166,21 @@ class Subscriber():
         response = self._send_request(subscription, request)
 
         # check each termination subscription response for success
-        if sirixml_exists(response, 'Siri.TerminationSubscriptionResponse.TerminationResponseStatus'):
-            for termination_response_status in sirixml_get_elements(response, 'Siri.TerminationSubscriptionResponse.TerminationResponseStatus'):
-                if termination_response_status.Status == True:
-                    self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} successfully")
-                    return True
-                else:
-                    self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber}")
-                    return False
+        if response is not None:
+            if sirixml_exists(response, 'Siri.TerminationSubscriptionResponse.TerminationResponseStatus'):
+                for termination_response_status in sirixml_get_elements(response, 'Siri.TerminationSubscriptionResponse.TerminationResponseStatus'):
+                    if termination_response_status.Status == True:
+                        self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} successfully")
+                        return True
+                    else:
+                        self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber}")
+                        return False
+            else:
+                # publisher returns no termination status at all, that means, there were no subscriptions at publisher side ... good anyway
+                self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} successfully")
+                return True
         else:
-            # publisher returns no termination status at all, that means, there were no subscriptions at publisher side ... good anyway
-            self._logger.info(f"Terminated subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber} successfully")
-            return True
+            self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber}")
             
     def request(self, publisher_ref: str) -> bool:
 

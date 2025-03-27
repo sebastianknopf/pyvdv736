@@ -94,7 +94,7 @@ class Publisher():
 
             response = self._send_request(subscription, delivery)
 
-            if sirixml_get_value(response, 'Siri.DataReceivedAcknowledgement.Status', False):
+            if response is not None and sirixml_get_value(response, 'Siri.DataReceivedAcknowledgement.Status', False):
                 self._logger.info(f"Sent delivery for subscription {subscription.id} to {subscription.subscriber} successfully")
             else:
                 self._logger.error(f"Failed to send delivery for subscription {subscription.id} to {subscription.subscriber}")
