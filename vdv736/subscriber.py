@@ -312,6 +312,18 @@ class SubscriberEndpoint():
         try:
             delivery = xml2siri_delivery(await req.body())
 
+            # check for active subscriptions from the publisher who has sent the delivery
+            delivery_producer_ref = sirixml_get_value(delivery, 'Siri.ServiceDelivery.ProducerRef')
+            
+            subscription_at_producer_found = False
+            for _, subscription in self._local_node_database.get_subscriptions().items():
+                if subscription.remote_service_participant_ref == delivery_producer_ref:
+                    subscription_at_producer_found = True
+                    break
+
+            if not subscription_at_producer_found:
+                return Response(status_code=401)
+            
             # process service delivery ...
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
                 situation_id = sirixml_get_value(pts, 'SituationNumber')
