@@ -10,6 +10,9 @@ from .isotime import interval
 from .model import Subscription
 
 
+class InvalidMethodError(Exception):
+    pass
+
 class SiriRequest(ABC):
 
     def __init__(self):

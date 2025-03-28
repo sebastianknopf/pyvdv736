@@ -13,6 +13,7 @@ from .delivery import SituationExchangeDelivery
 from .model import PublicTransportSituation
 from .model import Subscription
 from .participantconfig import ParticipantConfig
+from .request import InvalidMethodError
 from .request import SiriRequest
 from .request import CheckStatusRequest
 from .request import SituationExchangeSubscriptionRequest
@@ -202,14 +203,14 @@ class Subscriber():
         else:
             self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber}")
             
-    def request(self, publisher_ref: str) -> bool:
+    def request(self, publisher_ref: str, method: str = 'POST') -> bool:
 
         if self._pubsub:
             raise RuntimeError("Direct requests are only available in request/response mode!")
 
         # generate SituationExchangeRequest
         request = SituationExchangeRequest(self._service_participant_ref)
-        delivery = self._send_direct_request(publisher_ref, request)
+        delivery = self._send_direct_request(publisher_ref, request, method)
 
         if delivery is not None:
             # check whether on_delivery callback is used ...
@@ -273,7 +274,7 @@ class Subscriber():
             self._logger.error(ex)
             return None
         
-    def _send_direct_request(self, publisher_ref: str, siri_request: SiriRequest) -> SituationExchangeDelivery|None:
+    def _send_direct_request(self, publisher_ref: str, siri_request: SiriRequest, method: str) -> SituationExchangeDelivery|None:
         try:
             subscription_host = self._participant_config.participants[publisher_ref]['host']
             subscription_port = self._participant_config.participants[publisher_ref]['port']
@@ -287,12 +288,24 @@ class Subscriber():
                 "Content-Type": "application/xml"
             }
             
-            response_xml = requests.post(endpoint, headers=headers, data=siri_request.xml())
+            if method.lower() == 'post':
+                response_xml = requests.post(endpoint, headers=headers, data=siri_request.xml())
+            elif method.lower() == 'get':
+                response_xml = requests.get(endpoint, headers=headers)
+            else:
+                raise InvalidMethodError(f"Invalid request method {method}!")
+            
             delivery = xml2siri_delivery(response_xml.content)
 
             return delivery
         except Exception as ex:
-            self._logger.error(ex)
+
+            # re-throw occuring InvalidMethodError in this case
+            if isinstance(ex, InvalidMethodError):
+                raise ex
+            else:
+                self._logger.error(ex)
+
             return None
 
 
