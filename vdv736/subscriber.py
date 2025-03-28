@@ -253,13 +253,13 @@ class Subscriber():
         try:
             if isinstance(siri_request, CheckStatusRequest):
                 status_endpoint = subscription.single_endpoint if subscription.single_endpoint is not None else subscription.status_endpoint
-                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{status_endpoint}"
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}{status_endpoint}"
             elif isinstance(siri_request, SituationExchangeSubscriptionRequest):
                 subscribe_endpoint = subscription.single_endpoint if subscription.single_endpoint is not None else subscription.subscribe_endpoint
-                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{subscribe_endpoint}"
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}{subscribe_endpoint}"
             elif isinstance(siri_request, TerminateSubscriptionRequest):
                 unsubscribe_endpoint = subscription.single_endpoint if subscription.single_endpoint is not None else subscription.unsubscribe_endpoint
-                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{unsubscribe_endpoint}"
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}{unsubscribe_endpoint}"
             
             headers = {
                 "Content-Type": "application/xml"
@@ -281,7 +281,7 @@ class Subscriber():
             
             if isinstance(siri_request, SituationExchangeRequest):
                 request_endpoint = self._participant_config.participants[publisher_ref]['single_endpoint'] if self._participant_config.participants[publisher_ref]['single_endpoint'] is not None else self._participant_config.participants[publisher_ref]['request_endpoint']
-                endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}/{request_endpoint}"
+                endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}{request_endpoint}"
             
             headers = {
                 "Content-Type": "application/xml"
