@@ -72,7 +72,7 @@ from vdv736.delivery import SiriDelivery
 def on_delivery(delivery: SiriDelivery) -> None:
     print('Delivery callback called...')
 
-with Subscriber('PY_TEST_SUBSCRIBER', './participants.yaml') as subscriber:
+with Subscriber('PY_TEST_SUBSCRIBER', './participants.yaml', publish_subscribe=False) as subscriber:
     
     # run a direct request on the subscriber
     # the on_delivery callback is called immediately afterwards
@@ -85,6 +85,8 @@ with Subscriber('PY_TEST_SUBSCRIBER', './participants.yaml') as subscriber:
     while True:
         pass
 ```
+
+Please note the keyword argument `publish_subscribe` set to `False` here in order to use request/response pattern.
 
 See sample scripts in the [demo](/demo) folder.
 
