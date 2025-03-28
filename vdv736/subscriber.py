@@ -203,14 +203,14 @@ class Subscriber():
         else:
             self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber}")
             
-    def request(self, publisher_ref: str, method: str = 'POST') -> bool:
+    def request(self, publisher_ref: str, method: str = 'POST', headers: dict = dict()) -> bool:
 
         if self._pubsub:
             raise RuntimeError("Direct requests are only available in request/response mode!")
 
         # generate SituationExchangeRequest
         request = SituationExchangeRequest(self._service_participant_ref)
-        delivery = self._send_direct_request(publisher_ref, request, method)
+        delivery = self._send_direct_request(publisher_ref, request, method, headers)
 
         if delivery is not None:
             # check whether on_delivery callback is used ...
@@ -274,7 +274,7 @@ class Subscriber():
             self._logger.error(ex)
             return None
         
-    def _send_direct_request(self, publisher_ref: str, siri_request: SiriRequest, method: str) -> SituationExchangeDelivery|None:
+    def _send_direct_request(self, publisher_ref: str, siri_request: SiriRequest, method: str, headers: dict = dict()) -> SituationExchangeDelivery|None:
         try:
             subscription_host = self._participant_config.participants[publisher_ref]['host']
             subscription_port = self._participant_config.participants[publisher_ref]['port']
@@ -284,14 +284,17 @@ class Subscriber():
                 request_endpoint = self._participant_config.participants[publisher_ref]['single_endpoint'] if self._participant_config.participants[publisher_ref]['single_endpoint'] is not None else self._participant_config.participants[publisher_ref]['request_endpoint']
                 endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}{request_endpoint}"
             
-            headers = {
+            siri_headers = {
                 "Content-Type": "application/xml"
             }
+
+            if len(headers) > 0:
+                siri_headers = siri_headers | headers
             
             if method.lower() == 'post':
-                response_xml = requests.post(endpoint, headers=headers, data=siri_request.xml())
+                response_xml = requests.post(endpoint, headers=siri_headers, data=siri_request.xml())
             elif method.lower() == 'get':
-                response_xml = requests.get(endpoint, headers=headers)
+                response_xml = requests.get(endpoint, headers=siri_headers)
             else:
                 raise InvalidMethodError(f"Invalid request method {method}!")
             
