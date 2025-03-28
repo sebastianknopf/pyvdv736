@@ -28,7 +28,10 @@
             "module": "unittest",
             "args": ["discover"],
             "console": "integratedTerminal",
-            "env": {"PYTHONPATH": "${workspaceRoot}"}
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}",
+                "PYTHONWARNINGS": "ignore::DeprecationWarning"
+            }
         }
     ]
 }

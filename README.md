@@ -72,9 +72,13 @@ from vdv736.delivery import SiriDelivery
 def on_delivery(delivery: SiriDelivery) -> None:
     print('Delivery callback called...')
 
-with Subscriber('PY_TEST_SUBSCRIBER', './participants.yaml') as subscriber:
+with Subscriber('PY_TEST_SUBSCRIBER', './participants.yaml', publish_subscribe=False) as subscriber:
+    
+    # run a direct request on the subscriber
+    # the on_delivery callback is called immediately afterwards
     subscriber.request('PY_TEST_PUBLISHER')
 
+    # alternatively you can process every single situation using the method get_situations() and a for loop
     for situation_id, situation in subscriber.get_situations().items():
         pass # or to whatever you want to do ...
 
@@ -82,7 +86,24 @@ with Subscriber('PY_TEST_SUBSCRIBER', './participants.yaml') as subscriber:
         pass
 ```
 
-See sample scripts in the [demo](/demo) folder.
+Please note the keyword argument `publish_subscribe` set to `False` here in order to use request/response pattern.
+
+According to VDV736, all request must be performed using request method `POST`. However there're some data platforms providing ([OpenTransportData Swiss](https://opentransportdata.swiss/de/cookbook/siri-sx/)) SIRI-SX like data using the `GET` method. You can perform GET requests with custom headers using the following snippet:
+
+```python
+hdr = {
+    'Authorization': '[YourAccessToken]'
+}
+
+subscriber.request('PY_TEST_PUBLISHER', './participants.yaml', publish_subscribe=False, method='GET', headers=hdr)
+
+for situation_id, situation in subscriber.get_situations().items():
+    pass
+```
+
+_Please be aware, that `GET` requests are not supported officially!_
+
+See sample other scripts in the [demo](/demo) folder.
 
 ## License
 This project is licensed under the Apache License. See [LICENSE.md](LICENSE.md) for more information.

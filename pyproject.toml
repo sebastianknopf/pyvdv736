@@ -19,11 +19,20 @@ requires-python = ">=3.10"
 
 dynamic = ["version"]
 
+[project.optional-dependencies]
+test = [
+    "responses"
+]
+
+all = [
+    "pyvdv736[test]"
+]
+
 [tool.setuptools]
 packages = ["vdv736"]
 
 [tool.setuptools.package-dir]
-stopmonitor = "vdv736"
+pyvdv736 = "vdv736"
 
 [tool.setuptools_scm]
 write_to = "vdv736/version.py"

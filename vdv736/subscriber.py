@@ -13,6 +13,7 @@ from .delivery import SituationExchangeDelivery
 from .model import PublicTransportSituation
 from .model import Subscription
 from .participantconfig import ParticipantConfig
+from .request import InvalidMethodError
 from .request import SiriRequest
 from .request import CheckStatusRequest
 from .request import SituationExchangeSubscriptionRequest
@@ -35,13 +36,17 @@ from threading import Thread
 
 class Subscriber():
 
-    def __init__(self, participant_ref: str, participant_config_filename: str, local_ip_address: str = '0.0.0.0'):
+    def __init__(self, participant_ref: str, participant_config_filename: str, local_ip_address: str = '0.0.0.0', publish_subscribe: bool = True):
         self._service_participant_ref = participant_ref
         self._service_local_ip_address = local_ip_address
+        self._pubsub = publish_subscribe
 
         self._logger = logging.getLogger('uvicorn')
 
         self._local_node_database = local_node_database('vdv736.subscriber')
+        self._endpoint = None
+
+        self._on_delivery = None
 
         try:
             self._participant_config = ParticipantConfig(participant_config_filename)
@@ -49,38 +54,48 @@ class Subscriber():
             self._logger.error(ex)
 
     def __enter__(self):
-        self._endpoint_thread = Thread(target=self._run_endpoint, args=(), daemon=True)
-        self._endpoint_thread.start()
 
-        time.sleep(0.01) # give the endpoint thread time for startup
-        self._logger.info(f"Subscriber running at {self._participant_config.participants[self._service_participant_ref]['host']}:{self._participant_config.participants[self._service_participant_ref]['port']}")
-        self._logger.info(f"Local node database at {self._local_node_database._filename}")
+        if self._pubsub:
+            self._endpoint_thread = Thread(target=self._run_endpoint, args=(), daemon=True)
+            self._endpoint_thread.start()
+
+            time.sleep(0.01) # give the endpoint thread time for startup
+            self._logger.info(f"Subscriber running at {self._participant_config.participants[self._service_participant_ref]['host']}:{self._participant_config.participants[self._service_participant_ref]['port']}")
+            self._logger.info(f"Local node database at {self._local_node_database._filename}")
 
         return self
 
     def __exit__(self, exception_type, exception_value, exception_traceback) -> None:
         
-        # terminate all subscriptions
-        for subscription_id, subscription in self._local_node_database.get_subscriptions().items():
-            self.unsubscribe(subscription_id)
+        if self._pubsub:
+            # terminate all subscriptions
+            for subscription_id, subscription in self._local_node_database.get_subscriptions().items():
+                self.unsubscribe(subscription_id)
 
-        # terminate endpoint and close local database
-        if self._endpoint is not None:
-            self._endpoint.terminate()
-        
-        if self._endpoint_thread is not None:
-            self._endpoint_thread.join(1)
+            # terminate endpoint and close local database
+            if self._endpoint is not None:
+                self._endpoint.terminate()
+            
+            if self._endpoint_thread is not None:
+                self._endpoint_thread.join(1)
 
+        # local node database has to be closed anyway, regardless of using pubsub mode
         if self._local_node_database is not None:
             self._local_node_database.close(True)
 
     def set_callbacks(self, on_delivery_callback: typing.Callable[[SiriDelivery], None]) -> None:
-        self._endpoint.set_callbacks(on_delivery_callback)
+        self._on_delivery = on_delivery_callback
+
+        if self._endpoint is not None:
+            self._endpoint.set_callbacks(self._on_delivery)
 
     def get_situations(self) -> dict[str, PublicTransportSituation]:
         return self._local_node_database.get_situations()
 
     def status(self, subscription_id=None) -> bool:
+        if not self._pubsub:
+            raise RuntimeError("Status requests are only available in publish/subscribe mode!")
+        
         if subscription_id is not None:
             return self._status(subscription_id)
         else:
@@ -119,6 +134,9 @@ class Subscriber():
 
     def subscribe(self, participant_ref: str) -> str|None:
 
+        if not self._pubsub:
+            raise RuntimeError("Subscriptions can only be initialized in publish/subscribe mode!")
+        
         subscription_id = str(uuid.uuid4())
         subscription_host = self._participant_config.participants[participant_ref]['host']
         subscription_port = self._participant_config.participants[participant_ref]['port']
@@ -153,6 +171,9 @@ class Subscriber():
         
     def unsubscribe(self, subscription_id: str) -> bool:
         
+        if not self._pubsub:
+            raise RuntimeError("Subscriptions can only be terminated in publish/subscribe mode!")
+        
         # take subscription instance from subscription stack
         subscription = self._local_node_database.get_subscriptions()[subscription_id]
 
@@ -182,24 +203,30 @@ class Subscriber():
         else:
             self._logger.error(f"Failed to terminate subscription {subscription.id} @ {subscription.remote_service_participant_ref} as {subscription.subscriber}")
             
-    def request(self, publisher_ref: str) -> bool:
+    def request(self, publisher_ref: str, method: str = 'POST', headers: dict = dict()) -> bool:
+
+        if self._pubsub:
+            raise RuntimeError("Direct requests are only available in request/response mode!")
 
         # generate SituationExchangeRequest
         request = SituationExchangeRequest(self._service_participant_ref)
-        delivery = self._send_direct_request(publisher_ref, request)
+        delivery = self._send_direct_request(publisher_ref, request, method, headers)
 
         if delivery is not None:
+            # check whether on_delivery callback is used ...
+            if self._on_delivery is not None:
+                self._on_delivery(delivery)
+
             # process service delivery ...
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
                 situation_id = sirixml_get_value(pts, 'SituationNumber')
-                self._local_node_database.add_situation(situation_id, pts)
+                self._local_node_database.add_or_update_situation(situation_id, pts)
 
             return True
         else:
             self._logger.error(f"Failed to request data from {publisher_ref}")
 
             return False
-
 
     def _run_endpoint(self) -> None:
         self._endpoint = SubscriberEndpoint(self._service_participant_ref)
@@ -227,13 +254,13 @@ class Subscriber():
         try:
             if isinstance(siri_request, CheckStatusRequest):
                 status_endpoint = subscription.single_endpoint if subscription.single_endpoint is not None else subscription.status_endpoint
-                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{status_endpoint}"
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}{status_endpoint}"
             elif isinstance(siri_request, SituationExchangeSubscriptionRequest):
                 subscribe_endpoint = subscription.single_endpoint if subscription.single_endpoint is not None else subscription.subscribe_endpoint
-                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{subscribe_endpoint}"
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}{subscribe_endpoint}"
             elif isinstance(siri_request, TerminateSubscriptionRequest):
                 unsubscribe_endpoint = subscription.single_endpoint if subscription.single_endpoint is not None else subscription.unsubscribe_endpoint
-                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}/{unsubscribe_endpoint}"
+                endpoint = f"{subscription.protocol}://{subscription.host}:{subscription.port}{unsubscribe_endpoint}"
             
             headers = {
                 "Content-Type": "application/xml"
@@ -247,7 +274,7 @@ class Subscriber():
             self._logger.error(ex)
             return None
         
-    def _send_direct_request(self, publisher_ref: str, siri_request: SiriRequest) -> SituationExchangeDelivery|None:
+    def _send_direct_request(self, publisher_ref: str, siri_request: SiriRequest, method: str, headers: dict = dict()) -> SituationExchangeDelivery|None:
         try:
             subscription_host = self._participant_config.participants[publisher_ref]['host']
             subscription_port = self._participant_config.participants[publisher_ref]['port']
@@ -255,18 +282,33 @@ class Subscriber():
             
             if isinstance(siri_request, SituationExchangeRequest):
                 request_endpoint = self._participant_config.participants[publisher_ref]['single_endpoint'] if self._participant_config.participants[publisher_ref]['single_endpoint'] is not None else self._participant_config.participants[publisher_ref]['request_endpoint']
-                endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}/{request_endpoint}"
+                endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}{request_endpoint}"
             
-            headers = {
+            siri_headers = {
                 "Content-Type": "application/xml"
             }
+
+            if len(headers) > 0:
+                siri_headers = siri_headers | headers
             
-            response_xml = requests.post(endpoint, headers=headers, data=siri_request.xml())
+            if method.lower() == 'post':
+                response_xml = requests.post(endpoint, headers=siri_headers, data=siri_request.xml())
+            elif method.lower() == 'get':
+                response_xml = requests.get(endpoint, headers=siri_headers)
+            else:
+                raise InvalidMethodError(f"Invalid request method {method}!")
+            
             delivery = xml2siri_delivery(response_xml.content)
 
             return delivery
         except Exception as ex:
-            self._logger.error(ex)
+
+            # re-throw occuring InvalidMethodError in this case
+            if isinstance(ex, InvalidMethodError):
+                raise ex
+            else:
+                self._logger.error(ex)
+
             return None
 
 

@@ -157,7 +157,7 @@ class Publisher():
             
             if isinstance(siri_delivery, SituationExchangeDelivery):
                 delivery_endpoint = self._participant_config.participants[subscription.subscriber]['single_endpoint'] if self._participant_config.participants[subscription.subscriber]['single_endpoint'] is not None else self._participant_config.participants[subscription.subscriber]['delivery_endpoint']
-                endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}/{delivery_endpoint}"
+                endpoint = f"{subscription_protocol}://{subscription_host}:{subscription_port}{delivery_endpoint}"
 
             headers = {
                 "Content-Type": "application/xml"
