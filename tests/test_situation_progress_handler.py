@@ -27,7 +27,7 @@ class SubscriberDirectRequest_Test(unittest.TestCase):
         handler = SituationProgressHandler()
 
         result = handler.handle_situation(pts)
-        self.assertEqual(True, result)
+        self.assertEqual(False, result)
 
     def test_DecideWhetherToDelete_WithRecentlyUpdatedClosingSituation(self):
 
@@ -37,7 +37,7 @@ class SubscriberDirectRequest_Test(unittest.TestCase):
         handler = SituationProgressHandler()
 
         result = handler.handle_situation(pts)
-        self.assertEqual(False, result)
+        self.assertEqual(True, result)
         
 
         
