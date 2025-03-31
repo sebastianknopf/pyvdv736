@@ -10,6 +10,7 @@ from .database import local_node_database
 from .delivery import xml2siri_delivery
 from .delivery import SiriDelivery
 from .delivery import SituationExchangeDelivery
+from .handler import SituationProgressHandler
 from .model import PublicTransportSituation
 from .model import Subscription
 from .participantconfig import ParticipantConfig
@@ -220,7 +221,13 @@ class Subscriber():
             # process service delivery ...
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
                 situation_id = sirixml_get_value(pts, 'SituationNumber')
-                self._local_node_database.add_or_update_situation(situation_id, pts)
+                
+                result = SituationProgressHandler.handle_situation(pts)
+
+                if result:
+                    self._local_node_database.add_or_update_situation(situation_id, pts)
+                else:
+                    self._local_node_database.remove_situation(situation_id)
 
             return True
         else:
@@ -369,7 +376,13 @@ class SubscriberEndpoint():
             # process service delivery ...
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
                 situation_id = sirixml_get_value(pts, 'SituationNumber')
-                self._local_node_database.add_or_update_situation(situation_id, pts)
+                
+                result = SituationProgressHandler.handle_situation(pts)
+
+                if result:
+                    self._local_node_database.add_or_update_situation(situation_id, pts)
+                else:
+                    self._local_node_database.remove_situation(situation_id)
 
             # create data acknowledgement with OK status
             acknowledgement = DataReceivedAcknowledgement(
