@@ -2,10 +2,8 @@ import datetime
 
 def timestamp(additional_seconds=0) -> str:
     ts = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    ts = ts + datetime.timedelta(seconds=additional_seconds)
 
-    if additional_seconds > 0:
-        ts = ts + datetime.timedelta(seconds=additional_seconds)
-    
     return ts.isoformat()
 
 def interval(years: int, months: int, days: int, hours: int, minutes: int, seconds: int) -> str:
