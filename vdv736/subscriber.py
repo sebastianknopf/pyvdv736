@@ -222,12 +222,12 @@ class Subscriber():
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
                 situation_id = sirixml_get_value(pts, 'SituationNumber')
                 
-                delete_situation = SituationProgressHandler.decide_whether_to_delete(pts)
+                result = SituationProgressHandler.handle_situation(pts)
 
-                if delete_situation:
-                    self._local_node_database.remove_situation(situation_id)
-                else:
+                if result:
                     self._local_node_database.add_or_update_situation(situation_id, pts)
+                else:
+                    self._local_node_database.remove_situation(situation_id)
 
             return True
         else:
