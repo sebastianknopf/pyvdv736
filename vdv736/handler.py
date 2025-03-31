@@ -1,0 +1,33 @@
+import logging
+
+from vdv736.sirixml import get_value as sirixml_get_value
+
+from datetime import datetime
+from datetime import timezone
+
+class SituationProgressHandler():
+
+    @classmethod
+    def decide_whether_to_delete(cls, pts) -> bool:
+        situation_id = sirixml_get_value(pts, 'SituationNumber')
+        situation_progress = sirixml_get_value(pts, 'Progress', None)
+
+        if situation_progress is None:
+            logging.warning(f"Situation {situation_id} has not set Progress attribute!")
+        
+        if situation_progress == 'closed':
+            return True
+        elif situation_progress == 'closing':
+            situation_versioned_at = sirixml_get_value(pts, 'VersionedAtTime', None)
+            if situation_versioned_at is not None:
+                situation_versioned_at = datetime.fromisoformat(situation_versioned_at.replace('Z', '+00:00'))
+                situation_deprecation_difference_minutes = int((datetime.now(timezone.utc) - situation_versioned_at).total_seconds() // 60)
+
+                if situation_deprecation_difference_minutes >= 5:
+                    return True
+                else:
+                    return False
+            else:
+                return False
+        else:
+            return False
