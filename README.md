@@ -105,5 +105,10 @@ _Please be aware, that `GET` requests are not supported officially!_
 
 See sample other scripts in the [demo](/demo) folder.
 
+### Data Logging
+`Publisher` and `Subscriber` are able to log their requests and responses as raw XML files with additional meta data. Simply add the kwarg `datalog_directory` to the corresponding constructor with your desired destination directory.
+
+The logging is implemented as circular logging. That means, log files are available for 24h hours and will then be deleted automatically.
+
 ## License
 This project is licensed under the Apache License. See [LICENSE.md](LICENSE.md) for more information.
