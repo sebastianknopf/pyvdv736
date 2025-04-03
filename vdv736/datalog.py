@@ -28,7 +28,7 @@ class Datalog:
                     os.remove(datalog_file)
     @classmethod
     def create(cls, directory: str, data: str, meta: dict, *args) -> None:
-        cls.cleanup()
+        cls.cleanup(directory)
         
         if not os.path.exists(directory) or not os.path.isdir(directory):
             os.makedirs(directory)
