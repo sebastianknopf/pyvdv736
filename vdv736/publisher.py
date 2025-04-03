@@ -6,6 +6,7 @@ import uvicorn
 
 from .isotime import timestamp
 from .database import local_node_database
+from .datalog import Datalog
 from .delivery import ServiceDelivery
 from .delivery import SituationExchangeDelivery
 from .model import PublicTransportSituation
@@ -30,9 +31,10 @@ from threading import Thread
 
 class Publisher():
 
-    def __init__(self, participant_ref: str, participant_config_filename: str, local_ip_address: str = '0.0.0.0'):
+    def __init__(self, participant_ref: str, participant_config_filename: str, local_ip_address: str = '0.0.0.0', datalog_directory: str|None = None):
         self._service_participant_ref = participant_ref
         self._service_local_ip_address = local_ip_address
+        self._datalog = datalog_directory
 
         self._logger = logging.getLogger('uvicorn')
 
@@ -124,7 +126,7 @@ class Publisher():
             self._on_unsubscribe(subscription)
     
     def _run_endpoint(self) -> None:
-        self._endpoint = PublisherEndpoint(self._service_participant_ref)
+        self._endpoint = PublisherEndpoint(self._service_participant_ref, self._datalog)
 
         # disable uvicorn logs
         logging.getLogger('uvicorn.error').handlers = []
@@ -162,8 +164,23 @@ class Publisher():
             headers = {
                 "Content-Type": "application/xml"
             }
+
+            if self._datalog is not None:
+                Datalog.create(self._datalog, siri_delivery.xml(), {
+                    'method': 'POST',
+                    'endpoint': endpoint,
+                    'headers': headers
+                }, self._service_participant_ref, 'OUT', type(siri_delivery).__name__, 'Request')
             
             response_xml = requests.post(endpoint, headers=headers, data=siri_delivery.xml())
+
+            if self._datalog is not None:
+                Datalog.create(self._datalog, response_xml.content, {
+                    'method': 'POST',
+                    'endpoint': endpoint,
+                    'headers': headers
+                }, self._service_participant_ref, 'OUT', type(siri_delivery).__name__, 'Response')
+
             response = xml2siri_response(response_xml.content)
 
             return response
@@ -174,10 +191,11 @@ class Publisher():
 
 class PublisherEndpoint():
 
-    def __init__(self, participant_ref: str):
+    def __init__(self, participant_ref: str, datalog_directory: str|None = None):
         self._service_participant_ref = participant_ref
         self._service_startup_time = timestamp()
         self._logger = logging.getLogger('uvicorn')
+        self._datalog = datalog_directory
 
         self._router = APIRouter()
         self._endpoint = FastAPI()
@@ -228,7 +246,16 @@ class PublisherEndpoint():
             return Response(status_code=400)
 
     async def _status(self, req: Request, bgt: BackgroundTasks) -> Response:
-        request = xml2siri_request(await req.body())
+        xml = await req.body()
+            
+        if self._datalog is not None:
+            Datalog.create(self._datalog, xml, {
+                'method': req.method,
+                'endpoint': str(req.url),
+                'headers': dict(req.headers)
+            }, self._service_participant_ref, 'IN', 'CheckStatusRequest', 'Request')
+        
+        request = xml2siri_request(xml)
 
         # run callback method for status
         if self._on_status is not None:
@@ -236,10 +263,27 @@ class PublisherEndpoint():
 
         # simply respond with current status
         response = CheckStatusResponse(self._service_startup_time)
+
+        if self._datalog is not None:
+            Datalog.create(self._datalog, response.xml(), {
+                'method': req.method,
+                'endpoint': str(req.url),
+                'headers': dict(req.headers)
+            }, self._service_participant_ref, 'IN', 'CheckStatusRequest', 'Response')
+
         return Response(content=response.xml(), media_type='application/xml')
 
     async def _subscribe(self, req: Request, bgt: BackgroundTasks) -> Response:
-        request = xml2siri_request(await req.body())
+        xml = await req.body()
+            
+        if self._datalog is not None:
+            Datalog.create(self._datalog, xml, {
+                'method': req.method,
+                'endpoint': str(req.url),
+                'headers': dict(req.headers)
+            }, self._service_participant_ref, 'IN', 'SituationExchangeSubscriptionRequest', 'Request')
+        
+        request = xml2siri_request(xml)
 
         # add subscription parameters to subscription index
         subscription_id = sirixml_get_value(request, 'Siri.SubscriptionRequest.SituationExchangeSubscriptionRequest.SubscriptionIdentifier')
@@ -269,6 +313,13 @@ class PublisherEndpoint():
             else:
                 response.error(subscription_id)
 
+            if self._datalog is not None:
+                Datalog.create(self._datalog, response.xml(), {
+                    'method': req.method,
+                    'endpoint': str(req.url),
+                    'headers': dict(req.headers)
+                }, self._service_participant_ref, 'IN', 'SituationExchangeSubscriptionRequest', 'Response')
+
             return Response(content=response.xml(), media_type='application/xml')
         except Exception as ex:
             # log exception
@@ -278,10 +329,26 @@ class PublisherEndpoint():
             response = SubscriptionResponse(self._participant_ref, self._service_startup_time)
             response.error(subscription_id)
 
+            if self._datalog is not None:
+                Datalog.create(self._datalog, response.xml(), {
+                    'method': req.method,
+                    'endpoint': str(req.url),
+                    'headers': dict(req.headers)
+                }, self._service_participant_ref, 'IN', 'SituationExchangeSubscriptionRequest', 'Response')
+
             return Response(content=response.xml(), media_type='application/xml')
 
     async def _unsubscribe(self, req: Request, bgt: BackgroundTasks) -> Response:
-        request = xml2siri_request(await req.body())
+        xml = await req.body()
+            
+        if self._datalog is not None:
+            Datalog.create(self._datalog, xml, {
+                'method': req.method,
+                'endpoint': str(req.url),
+                'headers': dict(req.headers)
+            }, self._service_participant_ref, 'IN', 'TerminateSubscriptionRequest', 'Request')
+        
+        request = xml2siri_request(xml)
 
         subscriber_ref = sirixml_get_value(request, 'Siri.TerminateSubscriptionRequest.RequestorRef')
 
@@ -312,10 +379,26 @@ class PublisherEndpoint():
                 # respond with SubscriptionResponse Error for this subscription
                 response.add_error(subscription_id)
 
+        if self._datalog is not None:
+            Datalog.create(self._datalog, response.xml(), {
+                'method': req.method,
+                'endpoint': str(req.url),
+                'headers': dict(req.headers)
+            }, self._service_participant_ref, 'IN', 'TerminateSubscriptionRequest', 'Response')
+
         return Response(content=response.xml(), media_type='application/xml')
 
     async def _request(self, req: Request, bgt: BackgroundTasks) -> Response:
-        request = xml2siri_request(await req.body())
+        xml = await req.body()
+            
+        if self._datalog is not None:
+            Datalog.create(self._datalog, xml, {
+                'method': req.method,
+                'endpoint': str(req.url),
+                'headers': dict(req.headers)
+            }, self._service_participant_ref, 'IN', 'SituationExchangeRequest', 'Request')
+        
+        request = xml2siri_request(xml)
 
         # run callback method for requests
         if self._on_request is not None:
@@ -324,5 +407,12 @@ class PublisherEndpoint():
         delivery = SituationExchangeDelivery(self._service_participant_ref, None)
         for _, situation in self._local_node_database.get_situations().items():
             delivery.add_situation(situation)
+
+        if self._datalog is not None:
+            Datalog.create(self._datalog, delivery.xml(), {
+                'method': req.method,
+                'endpoint': str(req.url),
+                'headers': dict(req.headers)
+            }, self._service_participant_ref, 'IN', 'SituationExchangeRequest', 'Response')
 
         return Response(content=delivery.xml(), media_type='application/xml')
