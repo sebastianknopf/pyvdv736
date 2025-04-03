@@ -7,6 +7,7 @@ import uvicorn
 
 from .isotime import timestamp
 from .database import local_node_database
+from .datalog import Datalog
 from .delivery import xml2siri_delivery
 from .delivery import SiriDelivery
 from .delivery import SituationExchangeDelivery
@@ -37,10 +38,11 @@ from threading import Thread
 
 class Subscriber():
 
-    def __init__(self, participant_ref: str, participant_config_filename: str, local_ip_address: str = '0.0.0.0', publish_subscribe: bool = True):
+    def __init__(self, participant_ref: str, participant_config_filename: str, local_ip_address: str = '0.0.0.0', publish_subscribe: bool = True, datalog_directory: str|None = None):
         self._service_participant_ref = participant_ref
         self._service_local_ip_address = local_ip_address
         self._pubsub = publish_subscribe
+        self._datalog = datalog_directory
 
         self._logger = logging.getLogger('uvicorn')
 
@@ -236,7 +238,7 @@ class Subscriber():
             return False
 
     def _run_endpoint(self) -> None:
-        self._endpoint = SubscriberEndpoint(self._service_participant_ref)
+        self._endpoint = SubscriberEndpoint(self._service_participant_ref, self._datalog)
 
         # disable uvicorn logs
         logging.getLogger('uvicorn.error').handlers = []
@@ -273,7 +275,22 @@ class Subscriber():
                 "Content-Type": "application/xml"
             }
             
+            if self._datalog is not None:
+                Datalog.create(self._datalog, siri_request.xml(), {
+                    'method': 'POST',
+                    'endpoint': endpoint,
+                    'headers': headers
+                }, self._service_participant_ref, 'OUT', type(siri_request).__name__, 'Request')
+
             response_xml = requests.post(endpoint, headers=headers, data=siri_request.xml())
+
+            if self._datalog is not None:
+                Datalog.create(self._datalog, response_xml.content, {
+                    'method': 'POST',
+                    'endpoint': endpoint,
+                    'headers': headers
+                }, self._service_participant_ref, 'OUT', type(siri_request).__name__, 'Response')
+
             response = xml2siri_response(response_xml.content)
 
             return response
@@ -298,13 +315,27 @@ class Subscriber():
             if len(headers) > 0:
                 siri_headers = siri_headers | headers
             
+            if self._datalog is not None:
+                Datalog.create(self._datalog, siri_request.xml(), {
+                    'method': method.upper(),
+                    'endpoint': endpoint,
+                    'headers': headers
+                }, self._service_participant_ref, 'OUT', type(siri_request).__name__, 'Request')
+
             if method.lower() == 'post':
                 response_xml = requests.post(endpoint, headers=siri_headers, data=siri_request.xml())
             elif method.lower() == 'get':
                 response_xml = requests.get(endpoint, headers=siri_headers)
             else:
                 raise InvalidMethodError(f"Invalid request method {method}!")
-            
+
+            if self._datalog is not None:
+                Datalog.create(self._datalog, response_xml.content, {
+                    'method': method.upper(),
+                    'endpoint': endpoint,
+                    'headers': headers
+                }, 'OUT', self._service_participant_ref, type(siri_request).__name__, 'Response')
+
             delivery = xml2siri_delivery(response_xml.content)
 
             return delivery
@@ -321,10 +352,11 @@ class Subscriber():
 
 class SubscriberEndpoint():
 
-    def __init__(self, participant_ref: str):
+    def __init__(self, participant_ref: str, datalog_directory: str|None = None):
         self._service_participant_ref = participant_ref
         self._service_startup_time = timestamp()
         self._logger = logging.getLogger('uvicorn')
+        self._datalog = datalog_directory
 
         self._router = APIRouter()
         self._endpoint = FastAPI()
@@ -359,7 +391,16 @@ class SubscriberEndpoint():
 
     async def _delivery(self, req: Request, bgt: BackgroundTasks) -> Response:
         try:
-            delivery = xml2siri_delivery(await req.body())
+            xml = await req.body()
+            
+            if self._datalog is not None:
+                Datalog.create(self._datalog, xml, {
+                    'method': req.method,
+                    'endpoint': str(req.url),
+                    'headers': dict(req.headers)
+                }, self._service_participant_ref, 'IN', 'SituationExchangeDelivery', 'Request')
+            
+            delivery = xml2siri_delivery(xml)
 
             # check for active subscriptions from the publisher who has sent the delivery
             delivery_producer_ref = sirixml_get_value(delivery, 'Siri.ServiceDelivery.ProducerRef')
@@ -395,6 +436,13 @@ class SubscriberEndpoint():
             # run callback method for delivery
             if self._on_delivery is not None:
                 bgt.add_task(self._on_delivery, delivery)
+
+            if self._datalog is not None:
+                Datalog.create(self._datalog, acknowledgement.xml(), {
+                    'method': req.method,
+                    'endpoint': str(req.url),
+                    'headers': dict(req.headers)
+                }, self._service_participant_ref, 'IN', 'SituationExchangeDelivery', 'Response')
 
             return Response(content=acknowledgement.xml(), media_type='application/xml')
         except Exception as ex:
