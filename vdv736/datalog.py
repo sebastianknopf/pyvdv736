@@ -9,6 +9,9 @@ class Datalog:
 
     @classmethod
     def cleanup(cls, directory: str, ttl_hours: int = 24) -> None:
+        if not os.path.exists(directory) or not os.path.isdir(directory):
+            os.makedirs(directory)
+
         # look for old datalog files and remove them
         # for speed up, check for the filename not beginning with today instead of ressource consuming difference calculation
         today = datetime.now().strftime('%Y-%m-%d')
@@ -25,7 +28,9 @@ class Datalog:
                     os.remove(datalog_file)
     @classmethod
     def create(cls, directory: str, data: str, meta: dict, *args) -> None:
-    
+        if not os.path.exists(directory) or not os.path.isdir(directory):
+            os.makedirs(directory)
+
         # generate new datalog file
         datalog_timestamp = datetime.now().strftime('%Y-%m-%d-%H.%M.%S-%f')
         datalog_filename = f"{datalog_timestamp}_{'-'.join([str(a) for a in args])}.xml"
