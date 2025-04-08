@@ -20,7 +20,7 @@ class Datalog:
             # proceed only if the datalogfile is not from today
             if not datalog_file.startswith(today):
                 datalog_timestamp = datalog_file.split('_')[0]
-                datalog_timestamp = datetime.datetime.strptime(datalog_timestamp, '%Y-%m-%d-%H.%M.%S-%f')
+                datalog_timestamp = datetime.strptime(datalog_timestamp, '%Y-%m-%d-%H.%M.%S-%f')
 
                 difference = (datetime.datetime.now() - datalog_timestamp).total_seconds()
                 if difference > 60 * 60 * ttl_hours:
