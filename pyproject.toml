@@ -28,11 +28,5 @@ all = [
     "pyvdv736[test]"
 ]
 
-[tool.setuptools]
-packages = ["vdv736"]
-
-[tool.setuptools.package-dir]
-pyvdv736 = "vdv736"
-
 [tool.setuptools_scm]
-write_to = "vdv736/version.py"
+write_to = "src/vdv736/version.py"

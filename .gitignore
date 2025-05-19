@@ -206,6 +206,6 @@ pip-selfcheck.json
 
 # Project Specific
 datalog/
-vdv736/version.py
+src/vdv736/version.py
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,python,venv

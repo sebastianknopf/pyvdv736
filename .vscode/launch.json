@@ -10,7 +10,8 @@
             "request": "launch",
             "program": "demo/demo_publisher.py",
             "console": "integratedTerminal",
-            "env": {"PYTHONPATH": "${workspaceRoot}"},
+            "python": "${workspaceFolder}/venv/Scripts/python.exe",
+            "env": {"PYTHONPATH": "${workspaceRoot}/src"},
         },
         {
             "name": "Debug: Subscriber (P/S)",
@@ -19,7 +20,8 @@
             "program": "demo/demo_subscriber.py",
             "args": ["ps"],
             "console": "integratedTerminal",
-            "env": {"PYTHONPATH": "${workspaceRoot}"},
+            "python": "${workspaceFolder}/venv/Scripts/python.exe",
+            "env": {"PYTHONPATH": "${workspaceRoot}/src"},
         },
         {
             "name": "Debug: Unittest",
@@ -28,8 +30,9 @@
             "module": "unittest",
             "args": ["discover"],
             "console": "integratedTerminal",
+            "python": "${workspaceFolder}/venv/Scripts/python.exe",
             "env": {
-                "PYTHONPATH": "${workspaceRoot}",
+                "PYTHONPATH": "${workspaceRoot}/src",
                 "PYTHONWARNINGS": "ignore::DeprecationWarning"
             }
         }
