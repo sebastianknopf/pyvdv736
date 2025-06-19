@@ -334,7 +334,7 @@ class Subscriber():
                     'method': method.upper(),
                     'endpoint': endpoint,
                     'headers': headers
-                }, 'OUT', self._service_participant_ref, type(siri_request).__name__, 'Response')
+                }, self._service_participant_ref, 'OUT', type(siri_request).__name__, 'Response')
 
             delivery = xml2siri_delivery(response_xml.content)
 
