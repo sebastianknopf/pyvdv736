@@ -14,6 +14,15 @@
             "env": {"PYTHONPATH": "${workspaceRoot}/src"},
         },
         {
+            "name": "Debug: Subscriber",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "demo/demo_subscriber.py",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/venv/Scripts/python.exe",
+            "env": {"PYTHONPATH": "${workspaceRoot}/src"},
+        },
+        {
             "name": "Debug: Subscriber (P/S)",
             "type": "debugpy",
             "request": "launch",
