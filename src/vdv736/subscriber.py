@@ -48,6 +48,7 @@ class Subscriber():
 
         self._local_node_database = local_node_database('vdv736.subscriber')
         self._endpoint = None
+        self._last_processed_index: list = list()
 
         self._on_delivery = None
 
@@ -216,6 +217,9 @@ class Subscriber():
         delivery = self._send_direct_request(publisher_ref, request, method, headers)
 
         if delivery is not None:
+            # track all situations which are processed currently
+            processed_index: list = list()
+
             # check whether on_delivery callback is used ...
             if self._on_delivery is not None:
                 self._on_delivery(delivery)
@@ -223,13 +227,20 @@ class Subscriber():
             # process service delivery ...
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
                 situation_id = sirixml_get_value(pts, 'SituationNumber')
-                
-                result = SituationProgressHandler.handle_situation(pts)
 
-                if result:
-                    self._local_node_database.add_or_update_situation(situation_id, pts)
-                else:
-                    self._local_node_database.remove_situation(situation_id)
+                self._local_node_database.add_or_update_situation(situation_id, pts)
+                
+                if situation_id not in self._last_processed_index:
+                    self._last_processed_index.append(situation_id)
+
+                processed_index.append(situation_id)
+
+            # build difference between _last_processed_index and processed_index
+            # see #40 for more information
+            diff: list = [id for id in self._last_processed_index if id not in processed_index]
+            for id in diff:
+                self._local_node_database.remove_situation(id)
+                self._last_processed_index.remove(id)
 
             return True
         else:
@@ -417,10 +428,9 @@ class SubscriberEndpoint():
             # process service delivery ...
             for pts in sirixml_get_elements(delivery, 'Siri.ServiceDelivery.SituationExchangeDelivery.Situations.PtSituationElement'):
                 situation_id = sirixml_get_value(pts, 'SituationNumber')
+                situation_progress = sirixml_get_value(pts, 'Progress', None)
                 
-                result = SituationProgressHandler.handle_situation(pts)
-
-                if result:
+                if situation_progress != 'closed':
                     self._local_node_database.add_or_update_situation(situation_id, pts)
                 else:
                     self._local_node_database.remove_situation(situation_id)
@@ -455,6 +465,13 @@ class SubscriberEndpoint():
             )
 
             acknowledgement.error()
+
+            if self._datalog is not None:
+                Datalog.create(self._datalog, acknowledgement.xml(), {
+                    'method': req.method,
+                    'endpoint': str(req.url),
+                    'headers': dict(req.headers)
+                }, self._service_participant_ref, 'IN', 'SituationExchangeDelivery', 'Response')
 
             return Response(content=acknowledgement.xml(), media_type='application/xml')
         
