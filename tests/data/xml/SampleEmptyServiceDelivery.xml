@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Siri xmlns="http://www.siri.org.uk/siri" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.0">
+	<ServiceDelivery>
+		<ResponseTimestamp>2024-10-25T01:00:14Z</ResponseTimestamp>
+		<ProducerRef>TEST-PUBLISHER</ProducerRef>
+		<ResponseMessageIdentifier>jpk8XMJ5R9ABlisp3XjVr</ResponseMessageIdentifier>
+		<Status>true</Status>
+		<MoreData>false</MoreData>
+		<SituationExchangeDelivery version="2.0">
+			<ResponseTimestamp>2024-10-25T01:00:14Z</ResponseTimestamp>
+			<SubscriberRef>TEST</SubscriberRef>
+			<SubscriptionRef>1</SubscriptionRef>
+			<Situations />
+		</SituationExchangeDelivery>
+	</ServiceDelivery>
+</Siri>
