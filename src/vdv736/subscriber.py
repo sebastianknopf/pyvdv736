@@ -11,7 +11,6 @@ from .datalog import Datalog
 from .delivery import xml2siri_delivery
 from .delivery import SiriDelivery
 from .delivery import SituationExchangeDelivery
-from .handler import SituationProgressHandler
 from .model import PublicTransportSituation
 from .model import Subscription
 from .participantconfig import ParticipantConfig
